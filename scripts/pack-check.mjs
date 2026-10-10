@@ -24,6 +24,15 @@ try {
     ? path.join(prefix, 'node_modules', '@spencer-life', 'wslens')
     : path.join(prefix, 'lib', 'node_modules', '@spencer-life', 'wslens');
   const pkg = JSON.parse(await readFile(path.join(packageDir, 'package.json'), 'utf8'));
+  const shipped = new Set(filenames);
+  for (const filename of filenames.filter(name => name.endsWith('.md'))) {
+    const document = await readFile(path.join(packageDir, filename), 'utf8');
+    for (const [, link] of document.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/gu)) {
+      if (/^(?:[a-z][a-z0-9+.-]*:|#)/iu.test(link)) continue;
+      const target = path.posix.normalize(path.posix.join(path.posix.dirname(filename), link.split(/[?#]/u)[0]));
+      assert.ok(shipped.has(target), `Packaged documentation link is missing: ${filename} -> ${link}`);
+    }
+  }
   const output = execFileSync(process.execPath, [path.join(packageDir, 'bin', 'wslens.mjs'), '--version'], { encoding: 'utf8' }).trim();
   assert.equal(output, pkg.version);
   const translated = execFileSync(process.execPath, [path.join(packageDir, 'bin', 'wslens.mjs'), 'path', 'C:\\Users\\Ada\\app'], { encoding: 'utf8' }).trim();
@@ -35,5 +44,5 @@ try {
     const script = '& ' + quotePath(shim, 'powershell') + ' --version; exit $LASTEXITCODE';
     assert.equal(execFileSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 15000 }).trim(), pkg.version);
   } else assert.equal(execFileSync(shim, ['--version'], { encoding: 'utf8' }).trim(), pkg.version);
-  console.log(`PASS: ${packed.filename} (${packed.size} bytes, ${filenames.length} files) installed offline; CLI and executable shim verified.`);
+  console.log(`PASS: ${packed.filename} (${packed.size} bytes, ${filenames.length} files) installed offline; documentation links, CLI, and executable shim verified.`);
 } finally { await rm(dir, { recursive: true, force: true }); }

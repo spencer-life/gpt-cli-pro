@@ -22,8 +22,9 @@ There are no dependency-install lifecycle scripts.
 
 `npm run pack:check` creates the actual distributable tarball, installs it
 offline into a temporary prefix containing spaces, verifies the package
-allowlist and license, executes its installed CLI, and invokes the installed
-command shim. On Windows that final check invokes the generated `.cmd` through
+allowlist, license, and local links in the shipped documentation, executes its
+installed CLI, and invokes the installed command shim. On Windows that final
+check invokes the generated `.cmd` through
 the system PowerShell. All temporary package files are removed afterward.
 
 `npm run demo` makes a disposable project with deliberate portability defects,
