@@ -150,7 +150,8 @@ reachability from Windows, another distribution, a container, or the LAN. See
 | PATHEXT | 32 entries and 8,192 characters; default when unset: `.COM;.EXE;.BAT;.CMD`. Explicitly empty stays empty. |
 | Project paths | 5 seconds overall; 10,000 files; 20,000 records, visited entries, or distinct components; 64 directory levels. |
 | Project content | 8 KiB per candidate header; 8 MiB total sampled bytes. |
-| Project Git | 2 seconds per Git invocation within the project budget; 4 MiB index output; 4 KiB repository-probe output. |
+| Project Git | 2 seconds per Git invocation within the project budget, including Windows known-folder discovery; 4 MiB index output; 4 KiB repository-probe output. |
+| Windows Git discovery | At most 1.5 seconds and 4 KiB for the fixed Program Files query, charged to the Git invocation's deadline and cached per process. |
 | Listener inputs | 1 MiB per table or command result; 4,096 listeners per parsed source; 32,768 text rows/fields, excluding a recognized Linux header. Linux has separate IPv4/IPv6 tables. |
 | Listener timing | Linux table reads: 1.5 seconds each, in parallel. Windows PowerShell: 12 seconds for a fixed local CIM query, allowing cold provider startup. Windows netstat and macOS lsof: 3 seconds each. |
 | Linux ownership | 650 ms; current process plus up to 256 other processes; up to 4,096 descriptor checks; 160-byte short-name reads. |

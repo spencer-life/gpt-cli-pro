@@ -13,7 +13,8 @@ with useful Linux/macOS fallbacks. It is not a WSL lifecycle manager.
   when a trusted Git executable is available and a bounded scan otherwise.
 - `src/ports.mjs`: current-namespace TCP listeners and explicit loopback probes.
 - `src/paths.mjs`: pure Windows/WSL path translation with explicit assumptions.
-- `src/process.mjs`: bounded subprocess execution using fixed trusted system paths.
+- `src/process.mjs`: bounded subprocess execution using trusted system locations;
+  Windows locations are established independently of inherited environment paths.
 - `src/report.mjs`: stable JSON envelope, redaction, terminal/Markdown escaping,
   and snapshot comparison. No full environment or command-line dumps.
 - `src/cli.mjs` and `bin/wslens.mjs`: argument validation, orchestration, output,
@@ -81,6 +82,15 @@ private keys. Do not follow project symlinks. Set subprocess timeouts/output
 limits. `ports --probe` may open loopback TCP connections only; all other
 commands are network-free. Port inspection covers the current network
 namespace; it cannot prove connectivity from the Windows host into WSL.
+
+Windows helper discovery resolves the fixed OS object-manager SystemRoot path
+through native filesystem resolution, then validates the canonical local path.
+It never uses a Node diagnostic report. System PowerShell/netstat and child
+system/module paths derive from that root. Git candidates come from a fixed,
+bounded PowerShell query of Windows' Program Files known folders; that bootstrap
+counts against the Git invocation's deadline. Missing or ambiguous locations fail
+closed, with project scanning as the documented Git fallback. Per-user or custom
+Git locations and project PATH entries cannot supply helper programs.
 
 Default diagnostic reports redact home and project roots. Path translation is
 an exact local utility and its output must remain unredacted. `--no-redact` is

@@ -56,7 +56,7 @@ The diagnostic adapters may execute a small allowlist of system programs:
 | Platform | Programs and purpose |
 | --- | --- |
 | Linux/WSL | Git from known system locations, for read-only index metadata |
-| Windows | Git from standard Git for Windows locations; system Windows PowerShell; system `netstat` |
+| Windows | Git beneath Windows' known Program Files folders; system Windows PowerShell; system `netstat` |
 | macOS | Git from known system/Homebrew locations; system `lsof` |
 
 Commands use argument arrays, never a shell interpolating project data. Child
@@ -66,6 +66,19 @@ config, and external Git environment overrides. PowerShell uses `-NoProfile`,
 `-NonInteractive`, a fixed script, and a system-only module path. A trusted tool
 missing from those known locations is disclosed; an arbitrary project-PATH
 program is not substituted.
+
+Windows system paths come from native filesystem resolution of the fixed
+`\\?\GLOBALROOT\SystemRoot` object-manager path. Inherited `SystemRoot`, `WINDIR`,
+`ProgramFiles`, `LOCALAPPDATA`, PATH, and module-path values do not select a
+helper executable. A fixed query through that system PowerShell obtains the
+Windows Program Files known folders before Git is considered. That query shares
+the Git invocation's existing deadline; a failed lookup uses the disclosed
+filesystem fallback. Custom and per-user Git installations are not executed.
+If the native system root cannot be established, Windows helpers are unavailable;
+there is no guessed drive or inherited-path fallback. The CLI does not generate
+or write Node diagnostic reports to discover these paths.
+
+The namespace mechanism follows Microsoft's [NT namespace documentation](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#nt-namespaces).
 
 The installed Node runtime and the machine's trusted system binaries are part
 of the trust boundary. WSLens is a diagnostic utility, not an isolation sandbox

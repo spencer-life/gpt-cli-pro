@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { quotePath } from '../src/paths.mjs';
+import { readWindowsRoot } from '../src/process.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const npm = process.env.npm_execpath;
@@ -40,7 +41,9 @@ try {
   const shim = process.platform === 'win32' ? path.join(prefix, 'wslens.cmd') : path.join(prefix, 'bin', 'wslens');
   assert.ok((await stat(shim)).isFile());
   if (process.platform === 'win32') {
-    const powershell = path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const systemRoot = readWindowsRoot();
+    assert.ok(systemRoot, 'Native Windows package coverage requires an independently resolved operating-system directory.');
+    const powershell = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const script = '& ' + quotePath(shim, 'powershell') + ' --version; exit $LASTEXITCODE';
     assert.equal(execFileSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 15000 }).trim(), pkg.version);
   } else assert.equal(execFileSync(shim, ['--version'], { encoding: 'utf8' }).trim(), pkg.version);

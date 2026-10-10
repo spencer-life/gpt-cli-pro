@@ -4,23 +4,21 @@ import { stat } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { inspectPorts } from '../src/ports.mjs';
-import { runSystem } from '../src/process.mjs';
+import { readWindowsRoot, runSystem } from '../src/process.mjs';
 import { cleanText } from '../src/report.mjs';
 
 const nativePlatform = ['win32', 'darwin'].includes(process.platform);
 
 async function expectedCollector() {
   if (process.platform === 'darwin') return 'lsof';
-  const executable = path.win32.join(process.env.SystemRoot || 'C:\\Windows',
+  const systemRoot = readWindowsRoot();
+  assert.ok(systemRoot, 'Native Windows coverage requires an independently resolved operating-system directory.');
+  const executable = path.win32.join(systemRoot,
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  try {
-    // A present Windows PowerShell must exercise the real query. A fallback to
-    // netstat must not conceal a broken script, encoding, or module invocation.
-    return (await stat(executable)).isFile() ? 'powershell' : 'netstat';
-  } catch (error) {
-    if (['ENOENT', 'ENOTDIR'].includes(error.code)) return 'netstat';
-    throw error;
-  }
+  // Hosted Windows must exercise the real PowerShell query. Neither a broken
+  // root bootstrap nor a missing helper can downgrade this assertion to netstat.
+  assert.ok((await stat(executable)).isFile(), 'Native Windows coverage requires the operating-system PowerShell executable.');
+  return 'powershell';
 }
 
 test('native Windows/macOS collectors find an owned TCP listener without passive connections', {

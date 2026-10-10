@@ -193,7 +193,10 @@ installation or run from the checkout instead of adding administrator privileges
 
 For unsupported Git locations, project checks still run using the documented
 filesystem fallback. WSLens intentionally does not execute an arbitrary `git`
-found in a project's PATH.
+found in a project's PATH. On Windows, only Git installations beneath the OS's
+Program Files known folders are eligible; custom and per-user installations use
+the fallback. System helper locations are established independently of inherited
+environment paths. See [execution boundaries](docs/privacy.md#execution-and-modification-boundaries).
 
 ## License
 

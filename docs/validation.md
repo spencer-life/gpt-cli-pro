@@ -40,6 +40,7 @@ shows the real diagnostic output, checks the expected result, and cleans up.
 | Actual Windows PowerShell TCP collection and probe | Native Windows integration test in hosted Windows jobs |
 | PowerShell literal evaluation for ASCII and typographic apostrophes | Native Windows test, skipped on other platforms |
 | Installed Windows `.cmd` with a prefix containing spaces | Hosted Windows package check |
+| Native Windows system-root discovery and helper selection with poisoned environment paths | Windows integration tests; malformed/unavailable roots and helper bounds also have injected coverage |
 | Actual macOS `lsof` collection, owning PID, and probe | Native macOS integration test in hosted macOS jobs |
 | WSL1/WSL2 detection, drvfs and custom mounts, nested mount boundaries, and Windows/Linux command mixing | Injected fixtures; no native WSL distribution was available in the local executor |
 
@@ -81,7 +82,8 @@ created by the implementation.
 Tests exercise redaction, terminal and Markdown escaping, PowerShell quoting,
 argument rejection, snapshot size/type checks, non-execution of project
 programs, sensitive-file exclusions, subprocess output/deadline bounds,
-incomplete filesystem scans, and read-only report behavior. Independent code
+incomplete filesystem scans, inherited Windows helper-path overrides, and
+read-only report behavior. Independent code
 review covered command execution, path conversion, reporting, and collection
 logic; concrete findings received regression coverage before delivery.
 
