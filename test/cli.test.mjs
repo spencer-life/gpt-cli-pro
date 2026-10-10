@@ -323,7 +323,7 @@ test('CLI entrypoint drains delayed stderr before process exit and retains exit 
   const dir = await mkdtemp(path.join(tmpdir(), 'wslens-stderr-drain-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const destination = path.join(dir, 'captured-stderr.txt');
-  const preload = new URL('./fixtures/stderr-delay.mjs', import.meta.url).href;
+  const preload = new URL('../scripts/fixtures/stderr-delay.mjs', import.meta.url).href;
   let error;
   try {
     await exec(process.execPath, ['--import', preload, bin, 'not-a-wslens-command'], {
