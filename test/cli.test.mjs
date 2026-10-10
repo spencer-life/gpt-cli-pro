@@ -398,3 +398,29 @@ test('diff rejects IDs that collide after cleaning rather than hide a removed fa
   assert.equal(normal.code, 1, normal.stderr);
   assert.deepEqual(JSON.parse(normal.stdout).removed.map(check => check.id), ['another']);
 });
+
+
+test('default diff rejects project-root ID aliases instead of losing a removed failed finding', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-redacted-id-collision-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const before = path.join(dir, 'before.json'), after = path.join(dir, 'after.json');
+  const root = '/private/my-secret-project';
+  const kept = { id: '<PROJECT>/same', status: 'pass', title: 'Healthy finding' };
+  const original = { schemaVersion: 1, tool: { name: 'wslens' }, command: 'doctor',
+    project: { root }, checks: [kept] };
+  await writeFile(after, JSON.stringify(original));
+  await writeFile(before, JSON.stringify({ ...original, checks: [
+    { id: root + '/same', status: 'fail', title: 'Removed failed finding' }, kept,
+  ] }));
+  const invalid = await run(['diff', before, after, '--json']);
+  assert.equal(invalid.code, 2, invalid.stderr);
+  assert.equal(invalid.stdout, '', 'No misleading successful diff should be emitted.');
+  assert.match(invalid.stderr, /Snapshot contains a finding identifier modified by sanitization or redaction/u);
+
+  // An explicitly raw local comparison may retain the exact path-bearing IDs.
+  const exact = await run(['diff', before, after, '--json', '--no-redact']);
+  assert.equal(exact.code, 1, exact.stderr);
+  const changes = JSON.parse(exact.stdout);
+  assert.deepEqual(changes.removed.map(check => check.id), [root + '/same']);
+  assert.equal(changes.unchanged, 1);
+});

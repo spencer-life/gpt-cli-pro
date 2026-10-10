@@ -34,8 +34,10 @@ home-directory patterns are masked too, including Windows names containing
 spaces or apostrophes.
 Known project roots in imported snapshots are masked before default diff output.
 Imported snapshot finding IDs and field names must survive text sanitization
-unchanged; otherwise the snapshot is rejected to prevent sanitized key/ID
-collisions from hiding findings during comparison.
+unchanged. Under default redaction, finding IDs must also remain unchanged by
+project/home masking. Snapshots failing either check are rejected rather than
+silently collapsing distinct comparison keys and hiding findings. Explicit
+`--no-redact` disables path masking, but never control-character validation.
 
 Windows drive and UNC roots are matched without regard to capitalization.
 POSIX roots on confirmed Windows filesystems, including WSL drive mounts at

@@ -340,3 +340,36 @@ test('untrusted snapshot field-name aliases cannot shadow schema fields', async 
   ] }));
   await assert.rejects(readSnapshot(file), /field name modified by sanitization/u);
 });
+
+
+test('snapshot IDs remain stable through the full project/home redaction policy', () => {
+  const root = '/private/secret-project';
+  const failing = { id: root + '/same', title: 'Failure that would disappear', status: 'fail' };
+  const healthy = { id: '<PROJECT>/same', title: 'Healthy finding', status: 'pass' };
+  const sample = makeReport('doctor', environment, [failing, healthy], {}, { root });
+
+  // Neither ID is changed by cleanText, but project substitution would cause
+  // both keys to be the identical literal "<PROJECT>/same".
+  assert.equal(cleanText(failing.id), failing.id);
+  assert.throws(() => sanitizeSnapshot(sample), /finding identifier modified by sanitization or redaction/u);
+  assert.deepEqual(sanitizeSnapshot(sample, { redact: false }).checks.map(check => check.id),
+    [failing.id, healthy.id]);
+
+  const privateHome = '/people/Ada Private';
+  const homeReport = makeReport('which', environment, [
+    { id: privateHome + '/status', title: 'Private home finding', status: 'warn' },
+  ]);
+  assert.throws(() => sanitizeSnapshot(homeReport, { home: privateHome }), /finding identifier modified by sanitization or redaction/u);
+
+  const windows = makeReport('doctor', environment, [
+    { id: 'c:\\work\\PROJECT\\status', title: 'Windows alias finding', status: 'warn' },
+  ], {}, { root: 'C:\\Work\\Project' });
+  windows.privacy = { projectRootCaseInsensitive: true };
+  assert.throws(() => sanitizeSnapshot(windows), /finding identifier modified by sanitization or redaction/u);
+
+  const sibling = makeReport('doctor', environment, [
+    { id: root + '-backup/status', title: 'Different directory', status: 'info' },
+  ], {}, { root });
+  assert.equal(sanitizeSnapshot(sibling).checks[0].id, root + '-backup/status',
+    'Component boundaries still distinguish sibling paths.');
+});

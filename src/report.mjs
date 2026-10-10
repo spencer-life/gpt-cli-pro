@@ -72,7 +72,14 @@ export function sanitizeSnapshot(snapshot, { home, redact = true } = {}) {
     : !snapshot.checks.some(check => ['environment.mounts-incomplete', 'environment.incomplete'].includes(check.id))
       && snapshot.checks.some(check => check.id === 'environment.windows-filesystem' && check.status === 'warn'
         && typeof snapshot.project?.root === 'string' && check.evidence?.[0] === snapshot.project.root);
-  return sanitize(snapshot, { home, project: snapshot.project?.root, projectCaseInsensitive, redact });
+  const safe = sanitize(snapshot, { home, project: snapshot.project?.root, projectCaseInsensitive, redact });
+  // A snapshot ID is an identity key, not presentation text. Even IDs that
+  // survive cleanText can collide when home/project paths are redacted.
+  // Reject the input instead of silently overwriting a distinct finding.
+  if (safe.checks.some((check, index) => check.id !== snapshot.checks[index].id)) {
+    throw new Error('Snapshot contains a finding identifier modified by sanitization or redaction.');
+  }
+  return safe;
 }
 
 export function makeReport(command, environment, checks, data = {}, project) {
