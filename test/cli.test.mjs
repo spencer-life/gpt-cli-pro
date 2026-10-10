@@ -6,7 +6,7 @@ import { mkdtemp, readFile, writeFile, rm, mkdir, symlink, lstat } from 'node:fs
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseCLI } from '../src/cli.mjs';
+import { main, parseCLI } from '../src/cli.mjs';
 
 const exec = promisify(execFile);
 const bin = fileURLToPath(new URL('../bin/wslens.mjs', import.meta.url));
@@ -113,6 +113,28 @@ test('explicit report file creation refuses overwrites, including source files',
     assert.match(repeat.stderr, /does not overwrite/u);
     assert.equal(await readFile(file, 'utf8'), before);
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('a color-capable terminal keeps interactive colors but saves text reports without escape bytes', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-output-color-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  let printed = '';
+  const io = {
+    cwd: dir, env: { PATH: '', TERM: 'xterm-256color' },
+    stdout: { isTTY: true, write(text, callback) { printed += text; callback?.(); return true; } },
+    stderr: { write(text) { assert.fail(text); } },
+  };
+  const args = ['which', 'wslens-definitely-no-such-command-731204', '--format', 'text'];
+  assert.equal(await main(args, io), 1);
+  assert.match(printed, /\u001b\[/u, 'Interactive text must still support ANSI color.');
+  printed = '';
+  const output = path.join(dir, 'report.txt');
+  assert.equal(await main([...args, '--output', output], io), 1);
+  assert.equal(printed, '');
+  const saved = await readFile(output);
+  assert.equal(saved.includes(0x1b), false, 'Saved text must not contain an escape byte.');
+  assert.match(saved.toString('utf8'), /^WSLens /u);
+  assert.match(saved.toString('utf8'), /which\.requested-unresolved/u);
 });
 
 test('snapshot CLI ignores timestamps, detects changes, and masks recorded project roots', async () => {

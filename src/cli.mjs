@@ -176,7 +176,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       report = makeReport('doctor', environment, [...environmentChecks(environment), ...paths.checks, ...commands.checks, ...project.checks, ...(ports?.checks ?? [])],
         { commands: commands.commands, pathEntries: paths.entries, ...(ports ? { listeners: ports.listeners, probes: ports.probes, portSource: ports.source } : {}) }, project.project);
     }
-    const redaction = { home: environment.home, project: root, redact: !values['no-redact'], color: Boolean(stdout.isTTY && env.NO_COLOR === undefined && !values['no-color'] && env.TERM !== 'dumb') };
+    const redaction = { home: environment.home, project: root, redact: !values['no-redact'], color: Boolean(values.output === undefined && stdout.isTTY && env.NO_COLOR === undefined && !values['no-color'] && env.TERM !== 'dumb') };
     await emit(renderReport(report, format, redaction), values.output, stdout);
     return reportExitCode(report, values.strict);
   } catch (error) {
