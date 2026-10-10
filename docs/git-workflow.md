@@ -67,7 +67,7 @@ Edit the branch owning a concern, commit there, then rebase dependent layers wit
 `submit`, `push`, and `sync` write remote state; `sync` also rebases and pushes.
 Inspect its resulting state: a message such as `Sync aborted` can accompany a
 successful exit code. Local-only projects can use branch creation and local
-rebase without publishing; see [local setup](local-projects.md).
+rebase without publishing; see [local setup](https://github.com/spencer-life/project-template/blob/main/docs/local-projects.md).
 
 If an environment has only a GitHub connector, track issues and PRs through it.
 Use ordinary single PRs where suitable. For a native stack, use the extension in

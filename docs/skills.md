@@ -66,7 +66,7 @@ access or tools. The CLI's Codex global target (`~/.codex/skills`) may differ fr
 A selector such as `owner/repo@skill-name` names a skill, not a pinned version.
 
 For substantive JavaScript or TypeScript work with installed dependencies, also
-follow [Intent guidance](stacks.md#dependency-guidance-and-tanstack). Intent
+follow [Intent guidance](https://github.com/spencer-life/project-template/blob/main/docs/stacks.md#dependency-guidance-and-tanstack). Intent
 discovers dependency-provided, versioned guidance and complements project skill
 discovery.
 

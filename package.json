@@ -1,0 +1,23 @@
+{
+  "name": "@spencer-life/wslens",
+  "version": "0.1.0",
+  "description": "Understand why your project works on one side of Windows and WSL but fails on the other.",
+  "type": "module",
+  "bin": { "wslens": "bin/wslens.mjs" },
+  "engines": { "node": ">=22" },
+  "files": ["bin/", "src/", "README.md", "LICENSE", "CHANGELOG.md", "docs/cli.md", "docs/checks.md", "docs/privacy.md"],
+  "scripts": {
+    "test": "node --test",
+    "lint": "node scripts/check.mjs",
+    "security": "node scripts/security.mjs",
+    "ci": "npm run lint && npm test && npm run security",
+    "demo": "node scripts/demo.mjs",
+    "pack:check": "node scripts/pack-check.mjs"
+  },
+  "license": "MIT",
+  "author": "spencer-life",
+  "repository": { "type": "git", "url": "git+https://github.com/spencer-life/gpt-cli-pro.git" },
+  "bugs": { "url": "https://github.com/spencer-life/gpt-cli-pro/issues" },
+  "homepage": "https://github.com/spencer-life/gpt-cli-pro#readme",
+  "keywords": ["wsl", "windows", "cli", "developer-tools", "diagnostics", "path", "cross-platform"]
+}

@@ -15,20 +15,16 @@ final delivery PR. Keep the issue open while required layers remain undelivered.
 Confirm the merged result and acceptance criteria before marking work complete;
 a local commit or open PR is not delivery.
 
-When terminal tools are available, optional `gh-issue-sync` provides an ignored
-Markdown mirror. Verify the new repository's origin and authenticate `gh` through
-the environment's approved method before initializing it. The tasks pin version
-`0.3.0` through mise without installing it during ordinary setup or CI:
+This repository uses GitHub issues directly. Its `mise.toml` does not install
+`gh-issue-sync` or define `issues:*` tasks. When terminal tools are available,
+optional `gh-issue-sync` can provide an ignored Markdown mirror after deliberate
+setup. Verify the repository's origin and authenticate `gh` through the
+environment's approved method before initializing it. The upstream
+[project template](https://github.com/spencer-life/project-template/blob/main/docs/issues.md)
+documents the optional setup; it is not part of WSLens installation or CI.
 
-```sh
-mise run issues:init
-mise run issues:pull
-mise run issues:status
-mise run issues:new -- "Describe the work"
-mise run issues:plan
-```
-
-The new issue is a local draft with a `T`-prefixed ID. Edit its Markdown body, then
+In that optional workflow, a new issue is a local draft with a `T`-prefixed ID.
+Edit its Markdown body, then
 preview a scoped push, for example `gh-issue-sync push --dry-run T123abc`, before
 the authorized `gh-issue-sync push T123abc`. These direct commands require the
 CLI on PATH; use the mise-pinned tool environment when necessary:
@@ -50,7 +46,7 @@ sync skill does not prevent issue tracking.
 
 ## Local-only projects and unavailable GitHub access
 
-Create `docs/work/0001-short-title.md` using [the work-item guide](work/README.md).
+Create `docs/work/0001-short-title.md` using [the work-item guide](https://github.com/spencer-life/project-template/blob/main/docs/work/README.md).
 Choose the next unused number. These versioned files are the tracker when the
 project has no GitHub remote; they also preserve unpublished hosted work when
 GitHub access is unavailable. Link the file in commit/branch handoffs.

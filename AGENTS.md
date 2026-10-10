@@ -19,7 +19,10 @@ Node.js 22+ CLI using only built-in modules. Keep the runtime dependency-free.
 - Commit coherent validated changes and push useful checkpoints within scope.
   KETA reviews the current PR head and blockers; ask for specific user merge
   approval as required by the Git workflow. Do not weaken required checks.
-- Use the repository's documented checks once present. Report passed, failed,
-  skipped, unavailable, and intentionally inapplicable coverage explicitly.
+- Run `npm run ci` (syntax/style, tests, and security policy) and
+  `npm run pack:check` (offline installed-package and command-shim smoke tests).
+  The equivalent `mise run ci` and `mise run pack:check` tasks use pinned Node.
+  Report passed, failed, skipped, unavailable, and intentionally inapplicable
+  coverage explicitly. Hosted CI adds native Windows and macOS coverage.
 - Do not publish a registry release, change repository security settings, or
   start recurring automation without authorization for that scope.

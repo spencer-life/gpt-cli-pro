@@ -1,0 +1,91 @@
+# Validation and remaining coverage
+
+This document describes the checks for the initial WSLens implementation on
+2026-10-10. The implementation PR records the tested full commit SHA, command
+results, and hosted check links. A configured workflow does not establish that
+its jobs passed; inspect the checks attached to the current PR head.
+
+## Reproduce the checks
+
+From a clean checkout with Node.js 22 or newer:
+
+```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run ci
+npm run pack:check
+npm run demo
+```
+
+`npm run ci` runs syntax and formatting checks, Node's test runner, and the
+focused security policy checker. The package has no third-party dependencies.
+There are no dependency-install lifecycle scripts.
+
+`npm run pack:check` creates the actual distributable tarball, installs it
+offline into a temporary prefix containing spaces, verifies the package
+allowlist and license, executes its installed CLI, and invokes the installed
+command shim. On Windows that final check invokes the generated `.cmd` through
+the system PowerShell. All temporary package files are removed afterward.
+
+`npm run demo` makes a disposable project with deliberate portability defects,
+shows the real diagnostic output, checks the expected result, and cleans up.
+
+## Platform evidence
+
+| Coverage | Where it is checked |
+| --- | --- |
+| Linux command integration, filesystem inspection, reports, and package installation | Local Linux executor and hosted Ubuntu jobs |
+| Real Linux TCP listener, owning PID, and explicit loopback probes | Linux native integration test using `/proc` |
+| Windows PATH/PATHEXT, PowerShell script candidates, mounts, and filename behavior | Injected platform fixtures on every OS |
+| Actual Windows PowerShell TCP collection and probe | Native Windows integration test in hosted Windows jobs |
+| PowerShell literal evaluation for ASCII and typographic apostrophes | Native Windows test, skipped on other platforms |
+| Installed Windows `.cmd` with a prefix containing spaces | Hosted Windows package check |
+| Actual macOS `lsof` collection, owning PID, and probe | Native macOS integration test in hosted macOS jobs |
+| WSL1/WSL2 detection, drvfs and custom mounts, nested mount boundaries, and Windows/Linux command mixing | Injected fixtures; no native WSL distribution was available in the local executor |
+
+The native port tests create a real ephemeral listener. They require the exact
+bound address, port, family, and current process owner, and verify that passive
+inspection makes no connection. The explicit IPv4 probe must create one
+connection. Windows requires the PowerShell collector when system PowerShell
+exists; a broken query cannot silently pass through the `netstat` fallback.
+
+Fixture coverage does not establish behavior on every Windows build, WSL
+distribution, filesystem driver, permission configuration, or localized OS.
+Real Windows-to-WSL forwarding, firewall behavior, and WSL mirrored networking
+are outside this tool's current-namespace port inspection and remain outside
+this test claim.
+
+## Runtime and workflow pins
+
+The initial pins were checked against upstream on 2026-10-10:
+
+- Node 22.23.3 and 24.21.0 on Ubuntu, Windows, and macOS.
+- Node 26.11.1 on Ubuntu for current-runtime compatibility.
+- Node 24.21.0 in `mise.toml`; direct npm commands are equivalent when mise is
+  unavailable. The local executor initially supplied Node 24.19.0, with Node
+  22 and the pinned Node 24 also run explicitly for compatibility checks.
+- GitHub Actions use full commit SHAs, read-only repository permissions, and
+  checkout credentials are not persisted.
+
+References: [Node releases](https://nodejs.org/en/about/previous-releases),
+[checkout](https://github.com/actions/checkout), and
+[setup-node](https://github.com/actions/setup-node).
+
+Renovate configuration is included with automerge disabled. App installation,
+repository access, and successful bot runs were not established by creating
+that configuration. No registry release or background maintenance service is
+created by the implementation.
+
+## Security evidence and limits
+
+Tests exercise redaction, terminal and Markdown escaping, PowerShell quoting,
+argument rejection, snapshot size/type checks, non-execution of project
+programs, sensitive-file exclusions, subprocess output/deadline bounds,
+incomplete filesystem scans, and read-only report behavior. Independent code
+review covered command execution, path conversion, reporting, and collection
+logic; concrete findings received regression coverage before delivery.
+
+`npm run security` checks a small, documented set of credential patterns and
+process/network/workflow policies. It is not a third-party vulnerability scan,
+penetration test, or proof of general security. Native platform checks and
+manual review remain separate evidence. See [privacy](privacy.md) for exact
+data handling and resource bounds.

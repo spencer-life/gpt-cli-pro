@@ -1,0 +1,8 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["npm", "github-actions", "mise"],
+  "minimumReleaseAge": "3 days",
+  "automerge": false,
+  "dependencyDashboard": true
+}
