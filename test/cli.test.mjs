@@ -370,3 +370,31 @@ test('large generated snapshots can be captured, imported, and compared by the a
   assert.equal(identical.code, 0, identical.stderr);
   assert.deepEqual(JSON.parse(identical.stdout).changed, []);
 });
+
+
+test('diff rejects IDs that collide after cleaning rather than hide a removed failure', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-colliding-ids-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const before = path.join(dir, 'before.json');
+  const after = path.join(dir, 'after.json');
+  const kept = { id: 'same', status: 'pass', title: 'Healthy command' };
+  const raw = { schemaVersion: 1, tool: { name: 'wslens' }, command: 'which', checks: [kept] };
+  await writeFile(after, JSON.stringify(raw));
+  for (const badId of ['sa\x1b[31mme', 'sa\x01me', 'sa\u202eme']) {
+    // The former implementation mapped both IDs to "same", retained the later
+    // healthy finding, and returned exit 0 despite a removed failed finding.
+    await writeFile(before, JSON.stringify({ ...raw, checks: [
+      { id: badId, status: 'fail', title: 'Removed failure' }, kept,
+    ] }));
+    const compared = await run(['diff', before, after, '--json']);
+    assert.equal(compared.code, 2, compared.stderr);
+    assert.equal(compared.stdout, '');
+    assert.match(compared.stderr, /Snapshot contains an invalid or duplicate finding/u);
+  }
+  await writeFile(before, JSON.stringify({ ...raw, checks: [
+    { id: 'another', status: 'fail', title: 'Removed failure' }, kept,
+  ] }));
+  const normal = await run(['diff', before, after, '--json']);
+  assert.equal(normal.code, 1, normal.stderr);
+  assert.deepEqual(JSON.parse(normal.stdout).removed.map(check => check.id), ['another']);
+});

@@ -78,7 +78,7 @@ export function sanitizeSnapshot(snapshot, { home, redact = true } = {}) {
 export function makeReport(command, environment, checks, data = {}, project) {
   const seen = new Set();
   for (const check of checks) {
-    if (!check.id || seen.has(check.id) || !STATUSES.includes(check.status)) throw new Error('Invalid or duplicate finding identifier.');
+    if (typeof check.id !== 'string' || !check.id || cleanText(check.id) !== check.id || seen.has(check.id) || !STATUSES.includes(check.status)) throw new Error('Invalid or duplicate finding identifier.');
     seen.add(check.id);
   }
   const summary = Object.fromEntries(STATUSES.map(status => [status, checks.filter(check => check.status === status).length]));
@@ -243,6 +243,20 @@ export function renderReport(report, format = 'text', options = {}) {
   return lines.join('\n') + '\n';
 }
 
+// Sanitizing field names may otherwise overwrite a valid schema field (for
+// example, an escaped alias of "checks"). Reject those aliases at import.
+function assertStableSnapshotKeys(value, depth = 0) {
+  if (depth > 30 || !value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const item of value) assertStableSnapshotKeys(item, depth + 1);
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (cleanText(key) !== key) throw new Error('Snapshot contains a field name modified by sanitization.');
+    assertStableSnapshotKeys(item, depth + 1);
+  }
+}
+
 export async function readSnapshot(filename) {
   if (!(await lstat(filename)).isFile()) throw new Error('Snapshot must be a regular file, not a directory, link, or device.');
   const flags = constants.O_RDONLY | (process.platform === 'win32' ? 0 : (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
@@ -266,9 +280,10 @@ export async function readSnapshot(filename) {
   if (report?.schemaVersion !== 1 || report?.tool?.name !== 'wslens' || !Array.isArray(report.checks) || report.checks.length > 2000 || typeof report.command !== 'string') {
     throw new Error('Expected a WSLens schemaVersion 1 JSON diagnostic report.');
   }
+  assertStableSnapshotKeys(report);
   const ids = new Set();
   for (const check of report.checks) {
-    if (!check || typeof check.id !== 'string' || ids.has(check.id) || !STATUSES.includes(check.status) || typeof check.title !== 'string'
+    if (!check || typeof check.id !== 'string' || !check.id || cleanText(check.id) !== check.id || ids.has(check.id) || !STATUSES.includes(check.status) || typeof check.title !== 'string'
       || (check.detail !== undefined && typeof check.detail !== 'string')
       || (check.evidence !== undefined && (!Array.isArray(check.evidence) || check.evidence.some(item => typeof item !== 'string')))) {
       throw new Error('Snapshot contains an invalid or duplicate finding.');

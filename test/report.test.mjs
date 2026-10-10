@@ -301,3 +301,42 @@ test('oversized findings fail clearly rather than emit unreadable snapshot JSON'
   }], {});
   assert.throws(() => renderReport(huge, 'json'), /Diagnostic JSON exceeds the 4 MiB snapshot limit/u);
 });
+
+
+test('finding identifiers must be stable under sanitization on creation and import', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'wslens-snapshot-ids-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const file = path.join(root, 'snapshot.json');
+  const good = { schemaVersion: 1, tool: { name: 'wslens' }, command: 'which',
+    checks: [{ id: 'same', title: 'Healthy', status: 'pass' }] };
+  const variants = ['sa\x1b[31mme', 'sa\x01me', 'sa\u202eme', 'sa\x7fme'];
+  for (const id of variants) {
+    assert.equal(cleanText(id), 'same', 'The fixture must collide under report cleaning.');
+    assert.throws(() => makeReport('which', environment, [
+      { id, status: 'fail', title: 'Hidden failure' }, { id: 'same', status: 'pass', title: 'Healthy' },
+    ]), /Invalid or duplicate finding identifier/u);
+    await writeFile(file, JSON.stringify({ ...good,
+      checks: [{ id, status: 'fail', title: 'Hidden failure' }, good.checks[0]] }));
+    await assert.rejects(readSnapshot(file), /invalid or duplicate finding/u);
+  }
+  await writeFile(file, JSON.stringify(good));
+  const parsed = await readSnapshot(file);
+  assert.deepEqual(parsed.checks.map(check => check.id), ['same']);
+  assert.equal(parsed.checks[0].status, 'pass');
+});
+
+test('untrusted snapshot field-name aliases cannot shadow schema fields', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'wslens-snapshot-shadow-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const file = path.join(root, 'snapshot.json');
+  const original = { schemaVersion: 1, tool: { name: 'wslens' }, command: 'which',
+    checks: [{ id: 'same', title: 'Real finding', status: 'fail' }] };
+  await writeFile(file, JSON.stringify({ ...original, ['che\x1b[31mcks']: [
+    { id: 'same', title: 'Shadowing pass', status: 'pass' },
+  ] }));
+  await assert.rejects(readSnapshot(file), /field name modified by sanitization/u);
+  await writeFile(file, JSON.stringify({ ...original, checks: [
+    { id: 'same', title: 'Real finding', status: 'fail', ['ti\x1b[31mtle']: 'Forged title' },
+  ] }));
+  await assert.rejects(readSnapshot(file), /field name modified by sanitization/u);
+});

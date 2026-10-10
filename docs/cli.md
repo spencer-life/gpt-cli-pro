@@ -112,7 +112,9 @@ to [PowerShell's rules](https://learn.microsoft.com/en-us/powershell/module/micr
 
 Snapshots must be regular JSON files, at most 4 MiB each (4,194,304 UTF-8
 bytes), with `schemaVersion: 1`, `tool.name: "wslens"`, the same diagnostic
-command, and valid unique finding IDs. Generated diagnostic JSON uses this same
+command, and valid unique finding IDs. Finding IDs and JSON field names that
+would change when terminal/control characters are cleaned are rejected at
+import, so different findings cannot collapse into one during comparison. Generated diagnostic JSON uses this same
 output limit, including with `--no-redact`; byte counts include indentation
 and escaping. When a report exceeds the budget, it preserves findings and
 selected command paths, then retains the longest fitting prefixes of optional
