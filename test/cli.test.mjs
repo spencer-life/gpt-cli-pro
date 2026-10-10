@@ -26,6 +26,52 @@ test('argument validation rejects mistakes instead of silently ignoring flags', 
   assert.equal(parseCLI(['ports', '--port=3000', '--probe']).port, 3000);
   assert.equal(parseCLI(['report']).format, 'markdown');
   assert.deepEqual(parseCLI(['which', 'node', 'node']).names, ['node']);
+  for (const directory of [' ', '  project name  ']) {
+    assert.equal(parseCLI(['doctor', '--project', directory]).values.project, directory);
+    assert.deepEqual(parseCLI(['report', directory]).args, [directory]);
+  }
+  for (const quote of ['bash', 'powershell']) assert.equal(parseCLI(['path', 'C:\\work', '--quote', quote]).values.quote, quote);
+});
+
+test('empty project arguments and conflicting empty options fail before producing a report', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-empty-arguments-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const target = path.join(dir, 'explicit target');
+  await mkdir(target);
+  const cases = ['doctor', 'report'].flatMap(command => [
+    { args: [command, '--project', ''], message: /Project directory must not be empty/u },
+    { args: [command, target, '--project', ''], message: /Choose one project directory/u },
+    { args: [command, ''], message: /Project directory must not be empty/u },
+  ]);
+  cases.push(
+    { args: ['ports', '3000', '--port', ''], message: /Choose one port/u },
+    { args: ['doctor', '--json', '--format', ''], message: /--json conflicts with --format/u },
+  );
+  for (const [index, fixture] of cases.entries()) {
+    const output = path.join(dir, `unexpected-report-${index}.txt`);
+    const result = await run([...fixture.args, '--output', output], { cwd: dir, env: { ...process.env, PATH: '' } });
+    assert.equal(result.code, 2, JSON.stringify(fixture.args));
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, fixture.message);
+    await assert.rejects(lstat(output), { code: 'ENOENT' });
+  }
+});
+
+test('empty or invalid explicit quote modes never emit an unquoted path', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-empty-quote-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  for (const quote of ['', 'cmd', ' bash ']) {
+    const result = await run(['path', 'C:\\work', '--quote', quote]);
+    assert.equal(result.code, 2, JSON.stringify(quote));
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /--quote must be bash or powershell/u);
+  }
+  const output = path.join(dir, 'unexpected-path.txt');
+  const saved = await run(['path', 'C:\\work', '--quote', '', '--output', output]);
+  assert.equal(saved.code, 2);
+  assert.equal(saved.stdout, '');
+  assert.match(saved.stderr, /--quote must be bash or powershell/u);
+  await assert.rejects(lstat(output), { code: 'ENOENT' });
 });
 
 test('help/version/path work as installed command entrypoints', async () => {
@@ -53,7 +99,7 @@ test('doctor emits usable JSON, detects a real CRLF script, and never runs it', 
     const script = path.join(root, 'scripts', 'run.sh');
     await writeFile(script, '#!/bin/sh\r\necho should-never-run\r\n');
     await writeFile(path.join(root, '.env'), 'SECRET=should-not-appear');
-    const result = await run(['doctor', root, '--json', '--tools', 'node']);
+    const result = await run(['doctor', root, '--json', '--format', 'json', '--tools', 'node']);
     assert.notEqual(result.code, 2, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.command, 'doctor');

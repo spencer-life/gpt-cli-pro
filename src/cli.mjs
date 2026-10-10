@@ -91,14 +91,18 @@ export function parseCLI(argv) {
   const [command, ...args] = positionals;
   if (!Object.hasOwn(commandOptions, command)) throw new Error(`Unknown command ${command ?? '(none)'}. Run wslens --help.`);
   for (const name of Object.keys(values)) if (!commandOptions[command].includes(name)) throw new Error(`--${name} does not apply to ${command}.`);
-  if (values.json && values.format && values.format !== 'json') throw new Error('--json conflicts with --format.');
+  if (values.json && values.format !== undefined && values.format !== 'json') throw new Error('--json conflicts with --format.');
   const format = values.json ? 'json' : (values.format ?? (command === 'report' ? 'markdown' : 'text'));
   if (!['text', 'json', 'markdown'].includes(format)) throw new Error('--format must be text, json, or markdown.');
   if (command === 'path' && format === 'markdown') throw new Error('Path output supports text or JSON.');
-  if (['doctor', 'report'].includes(command) && (args.length > 1 || (args.length && values.project))) throw new Error('Choose one project directory, as an argument or with --project.');
+  if (['doctor', 'report'].includes(command)) {
+    if (args.length > 1 || (args.length && values.project !== undefined)) throw new Error('Choose one project directory, as an argument or with --project.');
+    if (values.project === '' || args[0] === '') throw new Error('Project directory must not be empty. Use "." for the current directory.');
+  }
   if (command === 'which' && (!args.length || args.length > 20)) throw new Error('which requires between 1 and 20 command names.');
-  if (command === 'ports' && (args.length > 1 || (args.length && values.port))) throw new Error('Choose one port, as an argument or with --port.');
+  if (command === 'ports' && (args.length > 1 || (args.length && values.port !== undefined))) throw new Error('Choose one port, as an argument or with --port.');
   if (command === 'path' && args.length !== 1) throw new Error('path requires one absolute path; quote paths containing spaces.');
+  if (values.quote !== undefined && !['bash', 'powershell'].includes(values.quote)) throw new Error('--quote must be bash or powershell.');
   if (command === 'diff' && args.length !== 2) throw new Error('diff requires before.json and after.json.');
   const portInput = command === 'ports' ? (args[0] ?? values.port) : values.port;
   let port;
@@ -136,7 +140,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     const { command, args, values, format, port, names } = parsed;
     if (command === 'path') {
       const translated = convertPath(args[0], { to: values.to, mountRoot: values['mount-root'], distro: values.distro ?? env.WSL_DISTRO_NAME });
-      const quoted = values.quote ? quotePath(translated, values.quote) : null;
+      const quoted = values.quote !== undefined ? quotePath(translated, values.quote) : null;
       const result = format === 'json' ? JSON.stringify({ schemaVersion: 1, tool: { name: 'wslens', version: VERSION }, command, input: args[0], output: translated,
         ...(quoted ? { quoted } : {}), mapping: 'lexical', mountRoot: values['mount-root'] ?? '/mnt' }, null, 2) + '\n' : (quoted ?? translated) + '\n';
       await emit(result, values.output, stdout);
