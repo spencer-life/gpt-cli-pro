@@ -304,3 +304,34 @@ test('snapshot CLI supports confirmed legacy mount findings but preserves incomp
   assert.equal(change.before.detail, `${root.toLowerCase()}/run.sh`);
   assert.equal(change.after.detail, `${root.toUpperCase()}/run.sh`);
 });
+
+test('main waits for a backpressured stderr callback before returning exit code 2', async () => {
+  let written = '', completed = false;
+  const io = {
+    stdout: { write() { assert.fail('An argument error must not write stdout.'); } },
+    stderr: { write(value, done) {
+      setTimeout(() => { written += value; completed = true; done?.(); }, 40);
+      return false;
+    } },
+  };
+  assert.equal(await main(['not-a-wslens-command'], io), 2);
+  assert.equal(completed, true, 'main must not resolve while its error is queued.');
+  assert.match(written, /^WSLens: Unknown command not-a-wslens-command/u);
+});
+
+test('CLI entrypoint drains delayed stderr before process exit and retains exit status 2', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-stderr-drain-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const destination = path.join(dir, 'captured-stderr.txt');
+  const preload = new URL('./fixtures/stderr-delay.mjs', import.meta.url).href;
+  let error;
+  try {
+    await exec(process.execPath, ['--import', preload, bin, 'not-a-wslens-command'], {
+      env: { ...process.env, WSLENS_STDERR_CAPTURE: destination }, timeout: 10000,
+    });
+  } catch (caught) { error = caught; }
+  assert.equal(error?.code, 2, error?.message);
+  assert.equal(error.stdout, '');
+  const captured = await readFile(destination, 'utf8');
+  assert.match(captured, /^WSLens: Unknown command not-a-wslens-command\. Run wslens --help\.\n$/u);
+});

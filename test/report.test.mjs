@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseMountInfo } from '../src/environment.mjs';
-import { cleanText, redactText, sanitize, makeReport, renderReport, reportExitCode, readSnapshot, compareSnapshots, renderDiff } from '../src/report.mjs';
+import { cleanText, redactText, sanitize, makeReport, renderReport, reportExitCode, readSnapshot, sanitizeSnapshot, compareSnapshots, renderDiff } from '../src/report.mjs';
 
 const environment = { platform: 'linux', arch: 'x64', release: 'test', isWSL: true, wslVersion: 2, home: '/home/ada', secret: 'never-output-this' };
 const finding = { id: 'example', status: 'warn', title: 'Example', detail: 'A project finding', evidence: ['/home/ada/work/app/run.sh'], remedy: 'Use LF endings.' };
@@ -180,4 +180,61 @@ test('snapshot input rejects malformed, oversized, duplicate, and non-regular da
       await assert.rejects(readSnapshot(link), /regular file/u);
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('redaction cleans project and home roots before matching sanitized values', () => {
+  const project = '/private/Se\x1b[31mcret';
+  const home = '/accounts/A\x07da';
+  const cleanProject = cleanText(project);
+  const cleanHome = cleanText(home);
+  assert.equal(cleanProject, '/private/Secret');
+  assert.equal(cleanHome, '/accounts/Ada');
+  const message = 'Project ' + project + '/src/main.mjs and home ' + home + '/bin; sibling ' + cleanProject + '-backup/run';
+  assert.equal(redactText(message, { project, home }),
+    'Project <PROJECT>/src/main.mjs and home <HOME>/bin; sibling ' + cleanProject + '-backup/run');
+  assert.equal(redactText('/private/secret/bin', { project }), '/private/secret/bin',
+    'Ordinary POSIX roots must remain case-sensitive.');
+  assert.equal(redactText(cleanProject + 'Extra/bin', { project }), cleanProject + 'Extra/bin',
+    'The cleaned prefix must still require a path-component boundary.');
+  assert.equal(redactText('visible', { project: '\x1b[31m', home: '\x00' }), 'visible',
+    'A root cleaned to the empty string must not be used as a matcher.');
+});
+
+test('cleaned roots are masked throughout text, JSON, Markdown, and imported snapshots', () => {
+  const project = '/private/Se\x1b[31mcret';
+  const home = '/accounts/A\x01da';
+  const diagnostic = makeReport('doctor', environment, [{
+    id: 'root-control-characters', status: 'warn', title: 'Inspect paths',
+    detail: project + '/script.sh', evidence: [cleanText(project) + '/node', home + '/tool'],
+    remedy: 'Check ' + cleanText(home) + '/settings',
+  }], { pathEntries: [{ value: project + '/bin' }] }, { root: project });
+  for (const format of ['text', 'json', 'markdown']) {
+    const text = renderReport(diagnostic, format, { project, home });
+    assert.equal(text.includes(cleanText(project) + '/'), false, format + ' exposed the project path');
+    assert.equal(text.includes(cleanText(home) + '/'), false, format + ' exposed the home path');
+    assert.match(text, /PROJECT/u);
+    assert.match(text, /HOME/u);
+  }
+  const raw = JSON.parse(renderReport(diagnostic, 'json', { project, home, redact: false }));
+  assert.equal(raw.project.root, cleanText(project));
+  const sanitized = sanitizeSnapshot(raw, { home });
+  assert.equal(sanitized.project.root, '<PROJECT>');
+  assert.equal(sanitized.checks[0].detail, '<PROJECT>/script.sh');
+  assert.equal(sanitized.checks[0].evidence[1], '<HOME>/tool');
+});
+
+test('cleaned Windows and WSL-mounted roots retain case-insensitive masking and boundaries', () => {
+  const windowsProject = 'C:\\Work\\Sec\x1b[32mret';
+  assert.equal(redactText('c:\\WORK\\SECRET\\bin', { project: windowsProject }), '<PROJECT>\\bin');
+  assert.equal(redactText('c:\\WORK\\SECRET-extra\\bin', { project: windowsProject }),
+    'c:\\WORK\\SECRET-extra\\bin');
+  const mountedProject = '/mnt/c/Se\x1b[33mcret';
+  const diagnostic = makeReport('doctor', mountedEnvironment, [{
+    ...finding, detail: '/MNT/C/SECRET/run.sh', evidence: ['/mnt/c/secret-backup/run.sh'],
+  }], {}, { root: mountedProject });
+  const safe = JSON.parse(renderReport(diagnostic, 'json', { project: mountedProject, environment: mountedEnvironment }));
+  assert.equal(safe.project.root, '<PROJECT>');
+  assert.equal(safe.checks[0].detail, '<PROJECT>/run.sh');
+  assert.equal(safe.checks[0].evidence[0], '/mnt/c/secret-backup/run.sh');
+  assert.equal(safe.privacy.projectRootCaseInsensitive, true);
 });

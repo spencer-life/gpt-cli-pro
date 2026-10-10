@@ -34,7 +34,10 @@ function rootCaseInsensitive(root, environment) {
 export function redactText(value, { home, project, homeCaseInsensitive = false, projectCaseInsensitive = false } = {}) {
   let text = cleanText(value);
   // Replace specific roots first, preserving where within the project a finding occurred.
-  for (const [root, replacement, ignoreCase] of [[project, '<PROJECT>', projectCaseInsensitive], [home, '<HOME>', homeCaseInsensitive]]) {
+  for (const [originalRoot, replacement, ignoreCase] of [[project, '<PROJECT>', projectCaseInsensitive], [home, '<HOME>', homeCaseInsensitive]]) {
+    if (!originalRoot) continue;
+    // Report strings are cleaned before replacement; roots must use the same form.
+    const root = cleanText(originalRoot);
     if (!root || root === '/' || /^[a-z]:[\\/]?$/iu.test(root)) continue;
     const variants = [...new Set([root.replace(/[\\/]$/u, ''), root.replaceAll('\\', '/').replace(/\/$/u, ''),
       ...(windowsRoot(root) ? [root.replaceAll('/', '\\').replace(/\\$/u, '')] : [])])];

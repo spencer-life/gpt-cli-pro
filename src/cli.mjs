@@ -189,7 +189,11 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       : error.code === 'ENOENT' ? 'A requested file or directory does not exist.'
         : error.code === 'EACCES' || error.code === 'EPERM' ? 'Permission denied while accessing the requested path.'
           : error.message;
-    stderr.write('WSLens: ' + cleanText(detail).replaceAll('\n', ' ') + '\n');
+    try {
+      await emit('WSLens: ' + cleanText(detail).replaceAll('\n', ' ') + '\n', null, stderr);
+    } catch {
+      // stderr may be unavailable. Preserve the documented operation error code.
+    }
     return 2;
   }
 }

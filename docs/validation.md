@@ -102,7 +102,9 @@ hosted platform; actual WSL remains the separate coverage limit above.
 
 ## Security evidence and limits
 
-Tests exercise redaction, terminal and Markdown escaping, PowerShell quoting,
+Tests exercise redaction (including roots containing stripped control characters),
+async/backpressured stderr completion and exit codes, terminal and Markdown
+escaping, PowerShell quoting,
 argument rejection, snapshot size/type checks, non-execution of project
 programs, sensitive-file exclusions, subprocess output/deadline bounds,
 incomplete filesystem scans, inherited Windows helper-path overrides, and

@@ -27,8 +27,11 @@ may still appear in indexed path metadata or portability findings.
 ## Report redaction
 
 Diagnostic text, JSON, and Markdown mask the selected project root and current
-home directory by default. Common Windows and Linux home-directory patterns
-are masked too, including Windows names containing spaces or apostrophes.
+home directory by default. Root strings receive the same terminal/control
+character cleaning as report text before matching, so legal POSIX names with
+stripped characters do not bypass masking. Common Windows and Linux
+home-directory patterns are masked too, including Windows names containing
+spaces or apostrophes.
 Known project roots in imported snapshots are masked before default diff output.
 
 Windows drive and UNC roots are matched without regard to capitalization.
