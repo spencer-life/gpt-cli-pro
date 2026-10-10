@@ -31,6 +31,23 @@ home directory by default. Common Windows and Linux home-directory patterns
 are masked too, including Windows names containing spaces or apostrophes.
 Known project roots in imported snapshots are masked before default diff output.
 
+Windows drive and UNC roots are matched without regard to capitalization.
+POSIX roots on confirmed Windows filesystems, including WSL drive mounts at
+custom locations, also mask capitalization variants. Each project/home root
+uses its own matching mount from a complete mount inspection; nested Linux
+filesystems and paths with unconfirmed mount evidence keep case-sensitive
+matching. This is a conservative masking policy, not a test of each directory's
+case-sensitivity setting. Microsoft documents the
+[default case-insensitive behavior of NTFS mounts in WSL](https://learn.microsoft.com/en-us/windows/wsl/case-sensitivity#changing-the-case-sensitivity-on-a-drive-mounted-to-a-wsl-distribution).
+
+JSON project reports retain a boolean `privacy.projectRootCaseInsensitive`,
+including with `--no-redact`, so a later diff can apply the source project's
+masking policy on another machine without exporting the mount table. Older
+snapshots can supply that evidence through their confirmed Windows-filesystem
+finding if they have no incomplete-mount/environment finding. Otherwise their
+POSIX roots keep case-sensitive matching. Snapshots do not retain the source
+home root; arbitrary custom home paths in raw imported reports can remain visible.
+
 `--no-redact` disables path masking for local troubleshooting. Terminal escape
 sequences, control characters, and bidirectional overrides are still removed
 from reports. Markdown presentation escapes untrusted filenames and titles.

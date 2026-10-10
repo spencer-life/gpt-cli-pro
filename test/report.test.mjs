@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { parseMountInfo } from '../src/environment.mjs';
 import { cleanText, redactText, sanitize, makeReport, renderReport, reportExitCode, readSnapshot, compareSnapshots, renderDiff } from '../src/report.mjs';
 
 const environment = { platform: 'linux', arch: 'x64', release: 'test', isWSL: true, wslVersion: 2, home: '/home/ada', secret: 'never-output-this' };
@@ -21,6 +22,77 @@ test('default reports redact known roots and other OS usernames at boundaries', 
   assert.equal(redactText('C:\\Users\\Ada\\project\\x', { project: 'c:\\users\\ada\\project' }), '<PROJECT>\\x');
   assert.equal(redactText('C:\\work\\ConfidentialClient\\run.sh', { project: 'C:/work/ConfidentialClient' }), '<PROJECT>\\run.sh');
   assert.equal(redactText('https://user:password@example.org/x'), 'https://<REDACTED>@example.org/x');
+});
+
+const mountedEnvironment = {
+  ...environment, mountInfoStatus: 'ok', mountInfoTruncated: false,
+  mounts: parseMountInfo([
+    '28 1 8:1 / / rw - ext4 /dev/sdc rw',
+    '29 28 0:57 / /mnt/c rw - 9p C:\\134 rw,aname=drvfs;path=C:\\134',
+    '30 28 0:58 / /drives/Shared rw - drvfs D:\\134 rw',
+    '31 29 8:2 / /mnt/c/native rw - ext4 /dev/sdd rw',
+    '32 28 0:59 / /mnt/share rw - 9p linux-share rw,trans=virtio',
+  ].join('\n')),
+};
+
+test('reports mask casing aliases of project and home roots on confirmed Windows mounts', () => {
+  for (const mount of ['/mnt/c', '/drives/Shared']) {
+    const project = `${mount}/Work/ConfidentialClient`, home = `${mount}/Profiles/Ada`;
+    const projectAlias = `${mount}/work/CONFIDENTIALCLIENT`, homeAlias = `${mount}/profiles/ADA`;
+    const evidence = [`${projectAlias}/bin/node`, `${homeAlias}/bin/tool`];
+    const diagnostic = makeReport('doctor', mountedEnvironment, [{ ...finding, evidence }], {
+      pathEntries: [{ value: `${projectAlias}/bin` }],
+      commands: [{ name: 'node', selected: evidence[0], candidates: [{ path: evidence[0], realPath: `${project}/bin/node` }] }],
+    }, { root: project });
+    const options = { home, project, environment: mountedEnvironment };
+    for (const format of ['text', 'json', 'markdown']) {
+      const output = renderReport(diagnostic, format, options);
+      assert.ok(!output.toLowerCase().includes(project.toLowerCase()), `${format} must mask the project alias`);
+      assert.ok(!output.toLowerCase().includes(home.toLowerCase()), `${format} must mask the home alias`);
+      assert.ok(output.includes(format === 'markdown' ? '\\<PROJECT\\>/bin/node' : '<PROJECT>/bin/node'));
+      assert.ok(output.includes(format === 'markdown' ? '\\<HOME\\>/bin/tool' : '<HOME>/bin/tool'));
+    }
+    const safe = JSON.parse(renderReport(diagnostic, 'json', options));
+    assert.equal(safe.project.root, '<PROJECT>');
+    assert.equal(safe.data.commands[0].candidates[0].realPath, '<PROJECT>/bin/node');
+    assert.equal(safe.data.pathEntries[0].value, '<PROJECT>/bin');
+    assert.equal(safe.privacy.projectRootCaseInsensitive, true);
+    assert.equal(Object.hasOwn(safe.environment, 'mounts'), false);
+    const raw = JSON.parse(renderReport(diagnostic, 'json', { ...options, redact: false }));
+    assert.deepEqual(raw.checks[0].evidence, evidence);
+    assert.equal(raw.privacy.projectRootCaseInsensitive, true, 'Raw snapshots retain the masking policy for a later diff');
+  }
+});
+
+test('mount-aware masking preserves Linux case distinctions and project component boundaries', () => {
+  const project = '/mnt/c/Work/Private', sibling = '/mnt/c/work/PRIVATE-other/bin';
+  const options = { project, environment: mountedEnvironment };
+  const diagnostic = makeReport('doctor', mountedEnvironment, [{ ...finding, evidence: [sibling, `${project}/bin`] }], {}, { root: project });
+  assert.deepEqual(JSON.parse(renderReport(diagnostic, 'json', options)).checks[0].evidence, [sibling, '<PROJECT>/bin']);
+  for (const [root, source] of [
+    ['/work/Private', mountedEnvironment],
+    ['/mnt/c/native/Private', mountedEnvironment],
+    ['/mnt/share/Private', mountedEnvironment],
+    ['/mnt/c/Work/Private', { ...mountedEnvironment, mounts: [], mountInfoStatus: 'unavailable' }],
+    ['/mnt/c/Work/Private', { ...mountedEnvironment, mountInfoTruncated: true }],
+  ]) {
+    const alias = `${root.toLowerCase()}/bin`;
+    const snapshot = makeReport('doctor', source, [{ ...finding, evidence: [alias, `${root}/bin`] }], {}, { root });
+    const safe = JSON.parse(renderReport(snapshot, 'json', { project: root, environment: source }));
+    assert.deepEqual(safe.checks[0].evidence, [alias, '<PROJECT>/bin']);
+    assert.equal(safe.privacy.projectRootCaseInsensitive, false);
+  }
+});
+
+test('project and home roots use their own filesystem evidence for masking', () => {
+  for (const [project, home, expected] of [
+    ['/mnt/c/Work/Private', '/mnt/c/native/Profile/Ada', ['<PROJECT>/bin', '/mnt/c/native/profile/ada/bin']],
+    ['/mnt/c/native/Work/Private', '/mnt/c/Profile/Ada', ['/mnt/c/native/work/private/bin', '<HOME>/bin']],
+  ]) {
+    const diagnostic = makeReport('doctor', mountedEnvironment, [{ ...finding, evidence: [`${project.toLowerCase()}/bin`, `${home.toLowerCase()}/bin`] }], {}, { root: project });
+    const safe = JSON.parse(renderReport(diagnostic, 'json', { project, home, environment: mountedEnvironment }));
+    assert.deepEqual(safe.checks[0].evidence, expected);
+  }
 });
 
 test('explicit redaction opt-out retains paths but still removes terminal controls', () => {

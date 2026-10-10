@@ -6,7 +6,7 @@ import { inspectCommands, inspectPath } from './which.mjs';
 import { inspectProject } from './project.mjs';
 import { inspectPorts } from './ports.mjs';
 import { convertPath, quotePath } from './paths.mjs';
-import { VERSION, cleanText, sanitize, makeReport, renderReport, reportExitCode, readSnapshot, compareSnapshots, renderDiff } from './report.mjs';
+import { VERSION, cleanText, sanitizeSnapshot, makeReport, renderReport, reportExitCode, readSnapshot, compareSnapshots, renderDiff } from './report.mjs';
 
 const HELP = `WSLens ${VERSION} — make Windows/WSL development problems explain themselves.
 
@@ -150,7 +150,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       const [before, after] = await Promise.all(args.map(readSnapshot));
       const home = env.HOME ?? env.USERPROFILE;
       const redact = !values['no-redact'];
-      const diff = compareSnapshots(sanitize(before, { home, project: before.project?.root, redact }), sanitize(after, { home, project: after.project?.root, redact }));
+      const diff = compareSnapshots(sanitizeSnapshot(before, { home, redact }), sanitizeSnapshot(after, { home, redact }));
       await emit(renderDiff(diff, format, { redact: !values['no-redact'], home }), values.output, stdout);
       return diff.added.length || diff.removed.length || diff.changed.length ? 1 : 0;
     }
@@ -180,7 +180,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       report = makeReport('doctor', environment, [...environmentChecks(environment), ...paths.checks, ...commands.checks, ...project.checks, ...(ports?.checks ?? [])],
         { commands: commands.commands, pathEntries: paths.entries, ...(ports ? { listeners: ports.listeners, probes: ports.probes, portSource: ports.source } : {}) }, project.project);
     }
-    const redaction = { home: environment.home, project: root, redact: !values['no-redact'], color: Boolean(values.output === undefined && stdout.isTTY && env.NO_COLOR === undefined && !values['no-color'] && env.TERM !== 'dumb') };
+    const redaction = { home: environment.home, project: root, environment, redact: !values['no-redact'], color: Boolean(values.output === undefined && stdout.isTTY && env.NO_COLOR === undefined && !values['no-color'] && env.TERM !== 'dumb') };
     await emit(renderReport(report, format, redaction), values.output, stdout);
     return reportExitCode(report, values.strict);
   } catch (error) {

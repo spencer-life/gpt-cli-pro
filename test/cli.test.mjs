@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { main, parseCLI } from '../src/cli.mjs';
+import { makeReport, renderReport } from '../src/report.mjs';
 
 const exec = promisify(execFile);
 const bin = fileURLToPath(new URL('../bin/wslens.mjs', import.meta.url));
@@ -199,4 +200,107 @@ test('snapshot CLI ignores timestamps, detects changes, and masks recorded proje
     assert.ok(!changed.stdout.includes('/private/project-name'));
     assert.ok(changed.stdout.includes('<PROJECT>/run.sh'));
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+// Injected source metadata exercises cross-machine snapshots; this is not native WSL validation.
+function wslSnapshot(root, checks) {
+  const environment = { platform: 'linux', arch: 'x64', isWSL: true, wslVersion: 2, home: '/home/fixture',
+    mountInfoStatus: 'ok', mountInfoTruncated: false, mounts: [
+      { mountPoint: '/', fsType: 'ext4', source: '/dev/root' },
+      { mountPoint: '/drives/Shared', fsType: '9p', source: 'D:\\', superOptions: ['aname=drvfs'] },
+      { mountPoint: '/drives/Shared/Work/native', fsType: 'ext4', source: '/dev/native' },
+    ] };
+  return JSON.parse(renderReport(makeReport('doctor', environment, checks, {}, { root }), 'json',
+    { project: root, home: environment.home, environment, redact: false }));
+}
+
+async function saveSnapshotPair(t, before, after) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-source-diff-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const files = [path.join(dir, 'before.json'), path.join(dir, 'after.json')];
+  await Promise.all([before, after].map((snapshot, index) => writeFile(files[index], JSON.stringify(snapshot))));
+  return files;
+}
+
+test('snapshot CLI masks Windows mount casing aliases in every diff format (WSL fixture)', async (t) => {
+  const root = '/drives/Shared/PrivateTeam/Project';
+  const oldAlias = root.toLowerCase(), newAlias = root.toUpperCase();
+  const oldCheck = { id: 'project.fixture', status: 'warn', title: `Blocked ${oldAlias}/run.sh`,
+    detail: `Observed ${oldAlias}/src/old.js`, evidence: [`${oldAlias}/bin/old`], remedy: `Review ${oldAlias}/settings` };
+  const newCheck = { id: oldCheck.id, status: 'pass', title: `Ready ${newAlias}/run.sh`,
+    detail: `Observed ${newAlias}/src/new.js`, evidence: [`${newAlias}/bin/new`], remedy: `Check ${newAlias}/settings` };
+  const before = wslSnapshot(root, [oldCheck]), after = wslSnapshot(root, [newCheck]);
+  assert.equal(before.privacy.projectRootCaseInsensitive, true, 'Confirmed source mount policy must survive export.');
+  const files = await saveSnapshotPair(t, before, after);
+  for (const format of ['json', 'text', 'markdown']) {
+    const result = await run(['diff', ...files, '--format', format]);
+    assert.equal(result.code, 1, result.stderr);
+    assert.equal(result.stderr, '');
+    assert.equal(result.stdout.toLowerCase().includes(root.toLowerCase()), false, `${format} exposed a source-root casing alias.`);
+    assert.ok(result.stdout.includes(format === 'markdown' ? '\\<PROJECT\\>' : '<PROJECT>'), `${format} must retain useful relative paths.`);
+    if (format === 'json') {
+      const [change] = JSON.parse(result.stdout).changed;
+      assert.equal(change.before.title, 'Blocked <PROJECT>/run.sh');
+      assert.equal(change.after.detail, 'Observed <PROJECT>/src/new.js');
+      assert.deepEqual(change.before.evidence, ['<PROJECT>/bin/old']);
+      assert.equal(change.after.remedy, 'Check <PROJECT>/settings');
+    }
+  }
+  const exact = await run(['diff', ...files, '--json', '--no-redact']);
+  assert.equal(exact.code, 1, exact.stderr);
+  assert.deepEqual(JSON.parse(exact.stdout).changed, [{ id: oldCheck.id, before: oldCheck, after: newCheck }]);
+});
+
+test('snapshot CLI ignores root-only casing aliases using both recorded roots (WSL fixtures)', async (t) => {
+  const firstRoot = '/drives/Shared/PrivateOne/App', secondRoot = '/drives/Shared/PrivateTwo/App';
+  const check = { id: 'project.fixture', status: 'warn', title: 'Inspect the script', evidence: [] };
+  const before = wslSnapshot(firstRoot, [{ ...check, detail: `${firstRoot.toLowerCase()}/run.sh` }]);
+  const after = wslSnapshot(secondRoot, [{ ...check, detail: `${secondRoot.toUpperCase()}/run.sh` }]);
+  const result = await run(['diff', ...await saveSnapshotPair(t, before, after), '--json']);
+  assert.equal(result.code, 0, result.stderr);
+  const diff = JSON.parse(result.stdout);
+  assert.deepEqual([diff.added, diff.removed, diff.changed], [[], [], []]);
+  assert.equal(diff.unchanged, 1);
+});
+
+test('snapshot CLI keeps Windows and nested Linux source policies separate (WSL fixtures)', async (t) => {
+  const windowsRoot = '/drives/Shared/Work', linuxRoot = `${windowsRoot}/native/Project`;
+  const linuxOtherCase = `${windowsRoot}/native/project/src/file.js`;
+  const check = { id: 'project.fixture', status: 'warn', title: 'Inspect the source', evidence: [] };
+  const before = wslSnapshot(windowsRoot, [{ ...check, detail: `${windowsRoot.toLowerCase()}/src/file.js` }]);
+  const after = wslSnapshot(linuxRoot, [{ ...check, detail: linuxOtherCase }]);
+  assert.equal(before.privacy.projectRootCaseInsensitive, true);
+  assert.equal(after.privacy.projectRootCaseInsensitive, false, 'The nested Linux mount must override its Windows parent.');
+  const result = await run(['diff', ...await saveSnapshotPair(t, before, after), '--json']);
+  assert.equal(result.code, 1, result.stderr);
+  const diff = JSON.parse(result.stdout);
+  assert.equal(diff.changed.length, 1, 'A distinct Linux spelling must remain a finding change.');
+  assert.equal(diff.changed[0].before.detail, '<PROJECT>/src/file.js');
+  assert.equal(diff.changed[0].after.detail, linuxOtherCase, 'A source policy must not redact the other snapshot.');
+});
+
+test('snapshot CLI supports confirmed legacy mount findings but preserves incomplete-source case differences (WSL fixtures)', async (t) => {
+  const root = '/drives/Shared/Legacy/Project';
+  const location = { id: 'environment.windows-filesystem', status: 'warn', title: 'Windows filesystem', evidence: [root, '9p'] };
+  const check = { id: 'project.fixture', status: 'warn', title: 'Inspect the script', evidence: [] };
+  const before = wslSnapshot(root, [location, { ...check, detail: `${root.toLowerCase()}/run.sh` }]);
+  const after = wslSnapshot(root, [location, { ...check, detail: `${root.toUpperCase()}/run.sh` }]);
+  for (const snapshot of [before, after]) delete snapshot.privacy.projectRootCaseInsensitive;
+  const files = await saveSnapshotPair(t, before, after);
+  const legacy = await run(['diff', ...files, '--json']);
+  assert.equal(legacy.code, 0, legacy.stderr);
+  assert.equal(JSON.parse(legacy.stdout).unchanged, 2);
+
+  const incomplete = { id: 'environment.mounts-incomplete', status: 'warn', title: 'Mount inventory is incomplete' };
+  for (const snapshot of [before, after]) {
+    snapshot.checks.push(incomplete);
+    snapshot.summary.warn += 1;
+  }
+  await Promise.all([before, after].map((snapshot, index) => writeFile(files[index], JSON.stringify(snapshot))));
+  const unknown = await run(['diff', ...files, '--json']);
+  assert.equal(unknown.code, 1, unknown.stderr);
+  const [change] = JSON.parse(unknown.stdout).changed;
+  assert.equal(change.id, check.id);
+  assert.equal(change.before.detail, `${root.toLowerCase()}/run.sh`);
+  assert.equal(change.after.detail, `${root.toUpperCase()}/run.sh`);
 });

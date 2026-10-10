@@ -1,6 +1,7 @@
 import { open, lstat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { stripVTControlCharacters } from 'node:util';
+import { classifyFilesystem } from './environment.mjs';
 
 export const VERSION = '0.1.0';
 export const STATUSES = ['fail', 'warn', 'info', 'pass', 'skip'];
@@ -20,16 +21,26 @@ function candidateQualifier(candidate) {
   return candidate.executable === false ? ' (not executable)' : '';
 }
 
-export function redactText(value, { home, project } = {}) {
+function windowsRoot(root) { return /^[a-z]:|^[\\/]{2}/iu.test(root ?? ''); }
+
+function rootCaseInsensitive(root, environment) {
+  if (windowsRoot(root)) return true;
+  if (!root || environment?.mountInfoStatus !== 'ok' || environment.mountInfoTruncated) return false;
+  const location = classifyFilesystem(root, environment);
+  // This is a privacy policy, not a claim about per-directory case-sensitivity flags.
+  return location.kind === 'windows' && location.source === 'mount' && location.confidence === 'confirmed';
+}
+
+export function redactText(value, { home, project, homeCaseInsensitive = false, projectCaseInsensitive = false } = {}) {
   let text = cleanText(value);
   // Replace specific roots first, preserving where within the project a finding occurred.
-  for (const [root, replacement] of [[project, '<PROJECT>'], [home, '<HOME>']]) {
+  for (const [root, replacement, ignoreCase] of [[project, '<PROJECT>', projectCaseInsensitive], [home, '<HOME>', homeCaseInsensitive]]) {
     if (!root || root === '/' || /^[a-z]:[\\/]?$/iu.test(root)) continue;
     const variants = [...new Set([root.replace(/[\\/]$/u, ''), root.replaceAll('\\', '/').replace(/\/$/u, ''),
-      ...(/^[a-z]:|^[\\/]{2}/iu.test(root) ? [root.replaceAll('/', '\\').replace(/\\$/u, '')] : [])])];
+      ...(windowsRoot(root) ? [root.replaceAll('/', '\\').replace(/\\$/u, '')] : [])])];
+    const flags = windowsRoot(root) || ignoreCase === true ? 'giu' : 'gu';
     for (const variant of variants) {
       if (!variant) continue;
-      const flags = /^[a-z]:|^\\\\/iu.test(variant) ? 'giu' : 'gu';
       text = text.replace(new RegExp(escapeRegExp(variant) + '(?=$|[\\\\/\\s"\'`,;:)}\\]])', flags), replacement);
     }
   }
@@ -49,6 +60,16 @@ export function sanitize(value, options = {}, depth = 0) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [cleanText(key), sanitize(item, options, depth + 1)]));
   }
   return value;
+}
+
+export function sanitizeSnapshot(snapshot, { home, redact = true } = {}) {
+  const recordedPolicy = snapshot.privacy?.projectRootCaseInsensitive;
+  // Older snapshots recorded confirmed Windows mounts as a finding instead.
+  const projectCaseInsensitive = typeof recordedPolicy === 'boolean' ? recordedPolicy
+    : !snapshot.checks.some(check => ['environment.mounts-incomplete', 'environment.incomplete'].includes(check.id))
+      && snapshot.checks.some(check => check.id === 'environment.windows-filesystem' && check.status === 'warn'
+        && typeof snapshot.project?.root === 'string' && check.evidence?.[0] === snapshot.project.root);
+  return sanitize(snapshot, { home, project: snapshot.project?.root, projectCaseInsensitive, redact });
 }
 
 export function makeReport(command, environment, checks, data = {}, project) {
@@ -84,8 +105,11 @@ export function reportExitCode(report, strict = false) {
 }
 
 export function renderReport(report, format = 'text', options = {}) {
-  const safe = sanitize(report, options);
-  safe.privacy = { redacted: options.redact !== false, scope: 'Home/project paths masked; review remaining filenames and process names before sharing.' };
+  const masking = { ...options, homeCaseInsensitive: rootCaseInsensitive(options.home, options.environment),
+    projectCaseInsensitive: rootCaseInsensitive(options.project, options.environment) };
+  const safe = sanitize(report, masking);
+  safe.privacy = { redacted: options.redact !== false, scope: 'Home/project paths masked; review remaining filenames and process names before sharing.',
+    ...(options.project ? { projectRootCaseInsensitive: masking.projectCaseInsensitive } : {}) };
   if (format === 'json') return JSON.stringify(safe, null, 2) + '\n';
   const checks = [...safe.checks].sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status));
   const summary = STATUSES.map(status => `${safe.summary[status] ?? 0} ${status}`).join(' | ');

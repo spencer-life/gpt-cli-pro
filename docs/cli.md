@@ -127,6 +127,11 @@ Default rendering masks known recorded project roots even for unredacted inputs.
 
 Diagnostic reports contain `schemaVersion`, `tool`, `command`, `generatedAt`,
 `environment`, optional `project`, `checks`, `summary`, `data`, and `privacy`.
+Project reports include the boolean `privacy.projectRootCaseInsensitive` as a
+masking policy for later diffs, including in raw exports. Each input's project
+root uses its own recorded policy; a diff does not infer the source filesystem
+from the machine reading it. See [redaction details](privacy.md#report-redaction).
+
 Finding IDs are stable identifiers within schema 1; statuses are `fail`, `warn`,
 `info`, `pass`, and `skip`. Additive fields may appear in later versions.
 

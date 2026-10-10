@@ -110,6 +110,13 @@ read-only report behavior. Independent code
 review covered command execution, path conversion, reporting, and collection
 logic; concrete findings received regression coverage before delivery.
 
+Redaction regressions reproduce capitalization aliases under standard WSL and
+custom Windows mounts in text, JSON, and Markdown. They check independent
+project/home policies, component boundaries, nested Linux and unconfirmed mount
+contexts, raw-export preservation, and snapshot diffs using the source project's
+masking policy. Mount behavior in these tests uses injected metadata, not a
+native WSL installation.
+
 `npm run security` checks a small, documented set of credential patterns and
 process/network/workflow policies. It is not a third-party vulnerability scan,
 penetration test, or proof of general security. Native platform checks and
