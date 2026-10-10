@@ -48,7 +48,10 @@ Look at `data.commands`: each command has `selected`, `observedFirst`,
 `complete`, and `candidates`. A visible candidate is not always a confirmed
 selection. `complete: false` means some inspection was unavailable; a null
 `selected` then cannot prove that the tool is absent. A nonnull selection can
-still be confirmed before a later incomplete PATH entry. A candidate with
+still be confirmed before a later incomplete PATH entry. Very large JSON
+reports may omit later candidates to stay within the 4 MiB snapshot limit;
+check `report.snapshot-limited`, `data.inventoryLimit`, and per-command
+`candidatesTruncated` before treating candidate arrays as exhaustive. A candidate with
 `matchesName: false` is a related name, not the requested executable. `realPath`
 describes a symlink target when visible.
 
@@ -124,7 +127,9 @@ wslens diff before.json after.json --json
 
 Use matching project scope and command options. Inputs must be regular WSLens
 schema 1 JSON diagnostic files, at most 4 MiB each, with the same diagnostic
-command. Markdown and path/diff JSON are not diagnostic snapshots.
+command. Generated diagnostic JSON follows the same limit, omitting optional
+inventory tails with an explicit warning rather than producing an unreadable
+snapshot. Markdown and path/diff JSON are not diagnostic snapshots.
 
 Diff JSON separates `added`, `removed`, and `changed` findings. Compare status
 and evidence to decide whether a change improved the situation. A removed

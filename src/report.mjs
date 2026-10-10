@@ -5,7 +5,7 @@ import { classifyFilesystem } from './environment.mjs';
 
 export const VERSION = '0.1.0';
 export const STATUSES = ['fail', 'warn', 'info', 'pass', 'skip'];
-const MAX_REPORT_BYTES = 4 * 1024 * 1024;
+export const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
 
 export function cleanText(value) {
   return stripVTControlCharacters(String(value)).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/gu, '').replaceAll('\r', '');
@@ -107,13 +107,82 @@ export function reportExitCode(report, strict = false) {
   return report.checks.some(check => check.status === 'fail' || (strict && check.status === 'warn')) ? 1 : 0;
 }
 
+
+function renderSnapshotJson(safe) {
+  const serialize = () => JSON.stringify(safe, null, 2) + '\n';
+  const fits = text => Buffer.byteLength(text, 'utf8') <= MAX_SNAPSHOT_BYTES;
+  const original = serialize();
+  if (fits(original)) return original;
+
+  // Reports must not emit JSON that a subsequent diff rejects. Preserve
+  // findings and selection decisions; omit optional inventory tails only.
+  const data = safe.data;
+  data.inventoryLimit = { maxBytes: MAX_SNAPSHOT_BYTES, omittedCandidates: 0, omittedListeners: 0, omittedPathEntries: 0 };
+  safe.checks.push({
+    id: 'report.snapshot-limited', status: 'warn', title: 'JSON inventory was limited for snapshot compatibility',
+    detail: 'Some detailed inventory entries were omitted to keep the diagnostic JSON within the 4 MiB snapshot limit. Finding statuses and selected command paths are preserved. See data.inventoryLimit for omitted counts.',
+    remedy: 'Run focused tool lookups or narrower port checks to retain more inventory details.',
+  });
+  safe.summary.warn = (safe.summary.warn ?? 0) + 1;
+
+  const groups = [
+    { countKey: 'omittedCandidates', inventories: (Array.isArray(data.commands) ? data.commands : [])
+      .filter(command => Array.isArray(command.candidates))
+      .map(command => ({ container: command, key: 'candidates', original: command.candidates })) },
+    { countKey: 'omittedListeners', inventories: Array.isArray(data.listeners)
+      ? [{ container: data, key: 'listeners', original: data.listeners }] : [] },
+    { countKey: 'omittedPathEntries', inventories: Array.isArray(data.pathEntries)
+      ? [{ container: data, key: 'pathEntries', original: data.pathEntries }] : [] },
+  ];
+
+  for (const { countKey, inventories } of groups) {
+    const maximum = Math.max(0, ...inventories.map(item => item.original.length));
+    if (!maximum) continue;
+    const total = inventories.reduce((sum, item) => sum + item.original.length, 0);
+    const retain = limit => {
+      let kept = 0;
+      for (const { container, key, original: entries } of inventories) {
+        container[key] = entries.slice(0, limit);
+        kept += container[key].length;
+        if (countKey === 'omittedCandidates') {
+          container.candidatesTotal = entries.length;
+          container.candidatesTruncated = container[key].length < entries.length;
+        }
+      }
+      data.inventoryLimit[countKey] = total - kept;
+    };
+
+    // First check whether omitting this group can bring the report under the
+    // limit. If not, move to the next group while retaining its omission.
+    retain(0);
+    if (!fits(serialize())) continue;
+
+    // Retain the longest per-command/list prefix that fits. This is bounded
+    // by log2(maximum) serializations, not one per omitted candidate.
+    let low = 0, high = maximum, best = 0;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      retain(middle);
+      if (fits(serialize())) { best = middle; low = middle + 1; }
+      else high = middle - 1;
+    }
+    retain(best);
+    const result = serialize();
+    if (fits(result)) return result;
+  }
+
+  // Finding evidence is never silently discarded. Fail before creating an
+  // unreadable snapshot if even bounding inventories cannot make it fit.
+  throw new Error('Diagnostic JSON exceeds the 4 MiB snapshot limit even after limiting optional inventories. Try fewer tools or a shorter PATH.');
+}
+
 export function renderReport(report, format = 'text', options = {}) {
   const masking = { ...options, homeCaseInsensitive: rootCaseInsensitive(options.home, options.environment),
     projectCaseInsensitive: rootCaseInsensitive(options.project, options.environment) };
   const safe = sanitize(report, masking);
   safe.privacy = { redacted: options.redact !== false, scope: 'Home/project paths masked; review remaining filenames and process names before sharing.',
     ...(options.project ? { projectRootCaseInsensitive: masking.projectCaseInsensitive } : {}) };
-  if (format === 'json') return JSON.stringify(safe, null, 2) + '\n';
+  if (format === 'json') return renderSnapshotJson(safe);
   const checks = [...safe.checks].sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status));
   const summary = STATUSES.map(status => `${safe.summary[status] ?? 0} ${status}`).join(' | ');
   if (format === 'markdown') {
@@ -181,15 +250,15 @@ export async function readSnapshot(filename) {
   let text;
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > MAX_REPORT_BYTES) throw new Error('Snapshot must be a regular file no larger than 4 MiB.');
-    const buffer = Buffer.alloc(MAX_REPORT_BYTES + 1);
+    if (!stat.isFile() || stat.size > MAX_SNAPSHOT_BYTES) throw new Error('Snapshot must be a regular file no larger than 4 MiB.');
+    const buffer = Buffer.alloc(MAX_SNAPSHOT_BYTES + 1);
     let offset = 0;
     while (offset < buffer.length) {
       const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, null);
       if (!bytesRead) break;
       offset += bytesRead;
     }
-    if (offset > MAX_REPORT_BYTES) throw new Error('Snapshot exceeds 4 MiB.');
+    if (offset > MAX_SNAPSHOT_BYTES) throw new Error('Snapshot exceeds 4 MiB.');
     text = buffer.subarray(0, offset).toString('utf8').replace(/^\uFEFF/u, '');
   } finally { await handle.close(); }
   let report;

@@ -139,6 +139,12 @@ status summary, and a versioned JSON envelope. Home and project roots are masked
 by default. Use `--no-redact` only when you need exact local paths. No report is
 uploaded. `--output` creates a new file and refuses to overwrite an existing one.
 
+Diagnostic JSON is limited to **4 MiB**, matching what `wslens diff` accepts.
+If an inventory would exceed that size, WSLens preserves findings and selected
+command paths, omits optional inventory tails, and adds a
+`report.snapshot-limited` warning with counts in `data.inventoryLimit`. Capture
+smaller, focused tool/port checks when you need all candidate details.
+
 Redaction is not a promise that every filename or process name is anonymous.
 Review exported reports before sharing. See [Privacy and safety](docs/privacy.md).
 

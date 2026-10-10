@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { main, parseCLI } from '../src/cli.mjs';
-import { makeReport, renderReport } from '../src/report.mjs';
+import { MAX_SNAPSHOT_BYTES, makeReport, renderReport, readSnapshot } from '../src/report.mjs';
 
 const exec = promisify(execFile);
 const bin = fileURLToPath(new URL('../bin/wslens.mjs', import.meta.url));
@@ -334,4 +334,39 @@ test('CLI entrypoint drains delayed stderr before process exit and retains exit 
   assert.equal(error.stdout, '');
   const captured = await readFile(destination, 'utf8');
   assert.match(captured, /^WSLens: Unknown command not-a-wslens-command\. Run wslens --help\.\n$/u);
+});
+
+
+test('large generated snapshots can be captured, imported, and compared by the actual CLI', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-large-snapshot-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const reports = ['before.json', 'after.json'].map(name => path.join(dir, name));
+  const commands = Array.from({ length: 20 }, (_, commandIndex) => ({
+    name: 'tool' + commandIndex, selected: '/tools/tool' + commandIndex,
+    candidates: Array.from({ length: 256 }, (_, index) => {
+      const filename = '/mnt/c/' + 'long-directory-'.repeat(32) + '/' + index + '/tool' + commandIndex;
+      return { path: filename, realPath: filename, executable: true, matchesName: true, kind: 'file', pathIndex: index };
+    }),
+    complete: true, observedFirst: '/tools/tool' + commandIndex, note: 'PATH selection is known.',
+  }));
+  for (const [index, filename] of reports.entries()) {
+    const report = makeReport('which', { platform: 'linux', arch: 'x64', isWSL: false }, [
+      { id: 'which.fixture', status: index ? 'pass' : 'warn', title: 'Fixture status', detail: 'Changes across snapshots' },
+    ], { commands });
+    const output = renderReport(report, 'json', { redact: false });
+    assert.ok(Buffer.byteLength(output, 'utf8') <= MAX_SNAPSHOT_BYTES);
+    await writeFile(filename, output);
+    const loaded = await readSnapshot(filename);
+    assert.equal(loaded.checks.at(-1).id, 'report.snapshot-limited');
+    assert.ok(loaded.data.inventoryLimit.omittedCandidates > 0);
+  }
+  const compared = await run(['diff', ...reports, '--json']);
+  assert.equal(compared.code, 1, compared.stderr);
+  assert.equal(compared.stderr, '');
+  const diff = JSON.parse(compared.stdout);
+  assert.deepEqual(diff.changed.map(change => change.id), ['which.fixture']);
+  assert.equal(diff.unchanged, 1, 'Truncation warning stays stable across captures.');
+  const identical = await run(['diff', reports[0], reports[0], '--json']);
+  assert.equal(identical.code, 0, identical.stderr);
+  assert.deepEqual(JSON.parse(identical.stdout).changed, []);
 });

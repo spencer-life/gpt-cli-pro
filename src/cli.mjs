@@ -181,8 +181,11 @@ export async function main(argv = process.argv.slice(2), io = {}) {
         { commands: commands.commands, pathEntries: paths.entries, ...(ports ? { listeners: ports.listeners, probes: ports.probes, portSource: ports.source } : {}) }, project.project);
     }
     const redaction = { home: environment.home, project: root, environment, redact: !values['no-redact'], color: Boolean(values.output === undefined && stdout.isTTY && env.NO_COLOR === undefined && !values['no-color'] && env.TERM !== 'dumb') };
-    await emit(renderReport(report, format, redaction), values.output, stdout);
-    return reportExitCode(report, values.strict);
+    const rendered = renderReport(report, format, redaction);
+    await emit(rendered, values.output, stdout);
+    // A size-limited JSON report adds a warning to the exported snapshot,
+    // while the original inspected report stays unchanged.
+    return reportExitCode(format === 'json' ? JSON.parse(rendered) : report, values.strict);
   } catch (error) {
     if (error.code === 'EPIPE') return 0;
     const detail = error.code === 'EEXIST' ? 'Output file already exists. Choose a new filename; WSLens does not overwrite files.'

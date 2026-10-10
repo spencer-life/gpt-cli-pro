@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseMountInfo } from '../src/environment.mjs';
-import { cleanText, redactText, sanitize, makeReport, renderReport, reportExitCode, readSnapshot, sanitizeSnapshot, compareSnapshots, renderDiff } from '../src/report.mjs';
+import { MAX_SNAPSHOT_BYTES, cleanText, redactText, sanitize, makeReport, renderReport, reportExitCode, readSnapshot, sanitizeSnapshot, compareSnapshots, renderDiff } from '../src/report.mjs';
 
 const environment = { platform: 'linux', arch: 'x64', release: 'test', isWSL: true, wslVersion: 2, home: '/home/ada', secret: 'never-output-this' };
 const finding = { id: 'example', status: 'warn', title: 'Example', detail: 'A project finding', evidence: ['/home/ada/work/app/run.sh'], remedy: 'Use LF endings.' };
@@ -237,4 +237,67 @@ test('cleaned Windows and WSL-mounted roots retain case-insensitive masking and 
   assert.equal(safe.checks[0].detail, '<PROJECT>/run.sh');
   assert.equal(safe.checks[0].evidence[0], '/mnt/c/secret-backup/run.sh');
   assert.equal(safe.privacy.projectRootCaseInsensitive, true);
+});
+
+
+function largeCommandReport(status = 'info') {
+  const commands = Array.from({ length: 20 }, (_, commandIndex) => ({
+    name: 'tool' + commandIndex, selected: '/tools/tool' + commandIndex, observedFirst: '/tools/tool' + commandIndex,
+    complete: true, note: 'External PATH inspection completed.',
+    candidates: Array.from({ length: 256 }, (_, index) => {
+      const filename = '/mnt/c/' + 'long-directory-'.repeat(32) + '/' + index + '/tool' + commandIndex;
+      return { path: filename, realPath: filename, executable: true, matchesName: true, kind: 'file', pathIndex: index };
+    }),
+  }));
+  return makeReport('which', { platform: 'linux', arch: 'x64', release: 'fixture', isWSL: false }, [
+    { id: 'which.fixture', status, title: 'Synthetic command inspection', detail: 'The selected lookup was observed.', evidence: [] },
+  ], { commands });
+}
+
+test('generated JSON fits the same 4 MiB limit as snapshot imports without hiding omissions', () => {
+  const original = largeCommandReport();
+  assert.ok(Buffer.byteLength(JSON.stringify(original, null, 2) + '\n') > MAX_SNAPSHOT_BYTES,
+    'Fixture must reproduce a diagnostic larger than the input limit.');
+  for (const redact of [true, false]) {
+    const json = renderReport(original, 'json', { redact });
+    assert.ok(Buffer.byteLength(json, 'utf8') <= MAX_SNAPSHOT_BYTES, 'Generated snapshot exceeded the read limit.');
+    const saved = JSON.parse(json);
+    assert.equal(saved.data.commands.length, 20);
+    assert.equal(saved.data.commands[0].selected, '/tools/tool0');
+    assert.deepEqual(saved.checks.map(check => check.id), ['which.fixture', 'report.snapshot-limited']);
+    assert.equal(saved.summary.warn, 1);
+    assert.equal(saved.data.inventoryLimit.maxBytes, MAX_SNAPSHOT_BYTES);
+    assert.ok(saved.data.inventoryLimit.omittedCandidates > 0);
+    const retained = saved.data.commands.reduce((count, command) => count + command.candidates.length, 0);
+    assert.equal(retained + saved.data.inventoryLimit.omittedCandidates, 5120);
+    assert.ok(saved.data.commands[0].candidates.length > 0, 'Useful candidate evidence should remain.');
+    assert.equal(saved.data.commands[0].candidates[0].path, original.data.commands[0].candidates[0].path);
+    assert.ok(saved.data.commands.every(command => command.candidatesTotal === 256));
+    assert.ok(saved.data.commands.some(command => command.candidatesTruncated));
+    assert.equal(reportExitCode(saved), 0, 'An inventory warning does not fail a normal command.');
+    assert.equal(reportExitCode(saved, true), 1, 'Strict mode must include the new warning.');
+  }
+  assert.equal(original.data.commands[0].candidates.length, 256, 'Rendering must not mutate the inspection data.');
+  assert.equal(original.checks.length, 1, 'Rendering must not mutate finding counts.');
+});
+
+test('oversized listener inventories are bounded instead of becoming invalid snapshots', () => {
+  const listeners = Array.from({ length: 4096 }, (_, index) => ({
+    address: '127.0.0.1', port: 3000, pid: index, process: 'long-process-'.repeat(85),
+  }));
+  const original = makeReport('ports', environment, [], { listeners });
+  assert.ok(Buffer.byteLength(JSON.stringify(original, null, 2) + '\n') > MAX_SNAPSHOT_BYTES);
+  const savedJson = renderReport(original, 'json');
+  const saved = JSON.parse(savedJson);
+  assert.ok(Buffer.byteLength(savedJson) <= MAX_SNAPSHOT_BYTES);
+  assert.equal(saved.data.listeners.length + saved.data.inventoryLimit.omittedListeners, listeners.length);
+  assert.ok(saved.data.inventoryLimit.omittedListeners > 0);
+  assert.equal(saved.checks.at(-1).id, 'report.snapshot-limited');
+});
+
+test('oversized findings fail clearly rather than emit unreadable snapshot JSON', () => {
+  const huge = makeReport('which', environment, [{
+    id: 'fixture.too-large', status: 'warn', title: 'Oversized evidence', evidence: ['e'.repeat(MAX_SNAPSHOT_BYTES)],
+  }], {});
+  assert.throws(() => renderReport(huge, 'json'), /Diagnostic JSON exceeds the 4 MiB snapshot limit/u);
 });

@@ -104,6 +104,14 @@ The installed Node runtime and the machine's trusted system binaries are part
 of the trust boundary. WSLens is a diagnostic utility, not an isolation sandbox
 for an already compromised operating system.
 
+Diagnostic JSON output and JSON snapshot input both enforce the same 4 MiB
+byte limit. If a report would exceed it, optional candidate, TCP listener, or
+PATH-entry inventory tails are removed and the snapshot includes a warning and
+omission counts. Findings and command selections are not discarded. When even
+those necessary fields exceed the bound, no oversized JSON is emitted or saved;
+an operation error is reported instead. This is separate from default path
+redaction, and applies to `--no-redact` exports too.
+
 `--output` is the only diagnostic file write: it creates a new file with
 exclusive creation and requests owner-only permissions on POSIX. Existing files
 are refused. Windows ACL inheritance remains controlled by Windows. Redirecting

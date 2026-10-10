@@ -112,6 +112,15 @@ read-only report behavior. Independent code
 review covered command execution, path conversion, reporting, and collection
 logic; concrete findings received regression coverage before delivery.
 
+A synthetic 20-command / 256-PATH-entry fixture produces more than 4 MiB of
+raw candidate JSON. Regression tests confirm that the bounded serializer emits
+valid JSON within the snapshot input limit, discloses omitted candidate counts,
+keeps original findings and selected paths, preserves strict warning semantics,
+and can capture two large snapshots for a real `wslens diff` invocation. Large
+listener inventories and oversized non-optional finding evidence are tested
+separately. Cross-platform CI runs the same fixtures without requiring thousands
+of actual filesystem entries.
+
 Redaction regressions reproduce capitalization aliases under standard WSL and
 custom Windows mounts in text, JSON, and Markdown. They check independent
 project/home policies, component boundaries, nested Linux and unconfirmed mount

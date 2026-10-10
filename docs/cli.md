@@ -76,7 +76,7 @@ WSLens does not run these shell queries for you.
 Pass `ports 3000` or `ports --port 3000`; not both. Valid ports are integers
 1–65535. Without a filter, the CLI lists visible TCP listeners. UDP is outside
 this command. Text output displays at most 100 observed listeners; JSON retains
-the bounded full inventory.
+the bounded observed inventory unless the snapshot-size limit requires omission.
 
 Probes use only `127.0.0.1` and `::1`, no DNS, and a 500 ms timeout per address.
 `reachable` means a TCP connection succeeded in this process's namespace.
@@ -110,8 +110,19 @@ to [PowerShell's rules](https://learn.microsoft.com/en-us/powershell/module/micr
 
 ## Diff
 
-Snapshots must be regular JSON files, at most 4 MiB each, with `schemaVersion: 1`,
-`tool.name: "wslens"`, the same diagnostic command, and valid unique finding IDs.
+Snapshots must be regular JSON files, at most 4 MiB each (4,194,304 UTF-8
+bytes), with `schemaVersion: 1`, `tool.name: "wslens"`, the same diagnostic
+command, and valid unique finding IDs. Generated diagnostic JSON uses this same
+output limit, including with `--no-redact`; byte counts include indentation
+and escaping. When a report exceeds the budget, it preserves findings and
+selected command paths, then retains the longest fitting prefixes of optional
+command candidates, listeners, and PATH entries. The warning
+`report.snapshot-limited` and `data.inventoryLimit` list omitted counts; each
+affected command also has `candidatesTotal` and `candidatesTruncated` fields.
+`complete` still describes *inspection* completeness, not a promise that every
+candidate is included in a size-limited export. With `--strict`, the new warning
+causes exit 1. If required findings alone are too large, JSON output fails with
+exit 2 rather than emitting a snapshot that cannot be read by `diff`.
 Symlink and device inputs are rejected. UTF-8 BOMs are accepted.
 
 Comparison covers finding status, title, detail, evidence, and remedy. It ignores

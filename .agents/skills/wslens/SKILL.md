@@ -48,7 +48,11 @@ with stable `id`, `status`, `title`, and optional `detail`, `evidence`, `remedy`
 and `docs`. Statuses are `fail`, `warn`, `info`, `pass`, and `skip`. Inspect
 limitations and relevant evidence rather than relying only on the exit code or
 summary. A skip, incomplete scan, or missing permission does not establish a
-healthy configuration. `path` and `diff` have their own output shapes.
+healthy configuration. Diagnostic JSON is capped at 4 MiB so it can be compared
+later. If `report.snapshot-limited` appears, inspect `data.inventoryLimit`
+and request narrower lookups for a full candidate/listener inventory; selected
+command paths and finding statuses remain available. `path` and `diff` have
+their own output shapes.
 
 ## Explain the result
 
