@@ -127,8 +127,10 @@ solely to address one script; inspect the affected diff first.
 | `ports.visibility` | warn / skip | Some records/tools were unavailable, malformed, limited, or permission-restricted. Empty output cannot establish that a port is unused. |
 | `ports.probe` | info / warn / skip | Reports explicit IPv4/IPv6 loopback connection results. Errors/timeouts warn; refusal and an unavailable address family are informational. No port means no probe. |
 
-Linux reads `/proc/net/tcp` and `tcp6`; Windows uses system PowerShell with a
-`netstat` fallback; macOS uses `lsof` and always notes permission-limited visibility.
+Linux reads `/proc/net/tcp` and `tcp6`; Windows uses system PowerShell to query
+the local `MSFT_NetTCPConnection` CIM provider, with a `netstat` fallback. The
+fixed query filters listening sockets and requests process names only for their
+owners. macOS uses `lsof` and always notes permission-limited visibility.
 PID ownership is optional and may be shared. Nothing kills a process or reserves
 a port. `--probe` connects only to `127.0.0.1` and `::1`, sending no application data.
 A TCP handshake does not prove application health, firewall configuration, or
@@ -150,7 +152,7 @@ reachability from Windows, another distribution, a container, or the LAN. See
 | Project content | 8 KiB per candidate header; 8 MiB total sampled bytes. |
 | Project Git | 2 seconds per Git invocation within the project budget; 4 MiB index output; 4 KiB repository-probe output. |
 | Listener inputs | 1 MiB per table or command result; 4,096 listeners per parsed source; 32,768 text rows/fields, excluding a recognized Linux header. Linux has separate IPv4/IPv6 tables. |
-| Listener timing | Linux table reads: 1.5 seconds each, in parallel. Windows PowerShell: 8 seconds, allowing cold module startup. Windows netstat and macOS lsof: 3 seconds each. |
+| Listener timing | Linux table reads: 1.5 seconds each, in parallel. Windows PowerShell: 12 seconds for a fixed local CIM query, allowing cold provider startup. Windows netstat and macOS lsof: 3 seconds each. |
 | Linux ownership | 650 ms; current process plus up to 256 other processes; up to 4,096 descriptor checks; 160-byte short-name reads. |
 | Loopback probes | 500 ms per address family; IPv4 and IPv6 run in parallel. |
 | Finding examples | Usually 12 paths; listener findings show 20 observations and at most 8 visibility issues. Text listener tables show up to 100 rows. |

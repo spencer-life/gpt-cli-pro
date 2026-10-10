@@ -11,10 +11,10 @@ const IO_TIMEOUT_MS = 1500;
 const OWNER_BUDGET_MS = 650;
 const PROBE_TIMEOUT_MS = 500;
 const HELPER_TIMEOUT_MS = 3000;
-// Windows PowerShell plus NetTCPIP/CIM can take more than three seconds to
-// initialize on a cold machine. Leave room for the bounded netstat fallback
-// under the CLI's separate 20-second command watchdog.
-const POWERSHELL_TIMEOUT_MS = 8000;
+// Windows PowerShell plus the local CIM provider need a cold-start allowance.
+// Keep the 12 s query + 3 s fallback + 500 ms probe below the CLI's separate
+// 20-second watchdog, including the environment collector's 2-second budget.
+const POWERSHELL_TIMEOUT_MS = 12000;
 const DOCS = 'https://learn.microsoft.com/windows/wsl/networking';
 
 function emptyParse() {
@@ -304,15 +304,24 @@ export async function inspectProcListeners({ port, read = readBoundedText, owner
 
 // All commands, module paths, and script text are fixed. Only listener addresses,
 // numeric PIDs/ports, and short process names cross the process boundary.
+// Query the same local provider used by Get-NetTCPConnection directly: State 2
+// means Listen. Provider-side filtering avoids enumerating every TCP connection
+// and skips NetTCPIP's CDXML import and special "no matching objects" errors.
+// No ComputerName/CimSession/InputObject is supplied, so CIM uses local WMI/COM.
+// See https://learn.microsoft.com/windows/win32/fwp/wmi/nettcpipprov/msft-nettcpconnection
+// and https://learn.microsoft.com/powershell/module/cimcmdlets/get-ciminstance
 const POWERSHELL_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
   "$ProgressPreference = 'SilentlyContinue'",
   '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
   "$env:PSModulePath = [System.IO.Path]::Combine($PSHOME, 'Modules')",
-  "$rows = @(NetTCPIP\\Get-NetTCPConnection -ErrorAction Stop | Microsoft.PowerShell.Core\\Where-Object { $_.State -eq 'Listen' } | Microsoft.PowerShell.Utility\\Select-Object -First 4097)",
+  "$rows = @(CimCmdlets\\Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetTCPConnection -Filter 'State = 2' -Property LocalAddress,LocalPort,OwningProcess -ErrorAction Stop | Microsoft.PowerShell.Utility\\Select-Object -First 4097)",
   '$names = @{}',
-  'foreach ($item in @(Microsoft.PowerShell.Management\\Get-Process -ErrorAction SilentlyContinue)) { $names[[int]$item.Id] = $item.ProcessName }',
-  '$result = @(foreach ($row in $rows) { [pscustomobject]@{ LocalAddress = $row.LocalAddress; LocalPort = [int]$row.LocalPort; OwningProcess = [int]$row.OwningProcess; ProcessName = $names[[int]$row.OwningProcess] } })',
+  'foreach ($row in $rows) { $names[[string]$row.OwningProcess] = $null }',
+  // CIM exposes UInt32 PIDs, while optional Get-Process -Id accepts Int32.
+  '$ids = @(foreach ($owner in $names.Keys) { if ([uint32]$owner -le [int]::MaxValue) { [int]$owner } })',
+  'if ($ids.Count -gt 0) { foreach ($item in @(Microsoft.PowerShell.Management\\Get-Process -Id $ids -ErrorAction SilentlyContinue)) { try { $names[[string]$item.Id] = $item.ProcessName } catch { } } }',
+  '$result = @(foreach ($row in $rows) { [pscustomobject]@{ LocalAddress = $row.LocalAddress; LocalPort = [int]$row.LocalPort; OwningProcess = [uint32]$row.OwningProcess; ProcessName = $names[[string]$row.OwningProcess] } })',
   'Microsoft.PowerShell.Utility\\ConvertTo-Json -InputObject $result -Compress -Depth 3',
 ].join('; ');
 

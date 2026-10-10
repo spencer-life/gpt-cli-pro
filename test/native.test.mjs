@@ -25,7 +25,8 @@ async function expectedCollector() {
 
 test('native Windows/macOS collectors find an owned TCP listener without passive connections', {
   skip: nativePlatform ? false : `Requires native Windows or macOS; this host is ${process.platform}. Native Linux coverage is in ports.test.mjs.`,
-  timeout: 20000,
+  // This test deliberately performs two independent collector invocations.
+  timeout: 30000,
 }, async (t) => {
   const source = await expectedCollector();
   let connections = 0;
@@ -48,7 +49,16 @@ test('native Windows/macOS collectors find an owned TCP listener without passive
   async function diagnosticRun(name, args, options) {
     const started = performance.now();
     try {
-      const result = await runSystem(name, args, options);
+      const observedArgs = [...args];
+      if (name === 'powershell') {
+        // Fixed test-only stage markers distinguish startup, provider, process
+        // lookup, and serialization delays if a hosted machine times out.
+        observedArgs[observedArgs.length - 1] = "[Console]::Error.WriteLine('wslens-native: started'); " + args.at(-1)
+          .replace('$rows = @(', "[Console]::Error.WriteLine('wslens-native: query'); $rows = @(")
+          .replace('$names = @{}', "[Console]::Error.WriteLine('wslens-native: names'); $names = @{}")
+          .replace('$result = @(', "[Console]::Error.WriteLine('wslens-native: serialize'); $result = @(");
+      }
+      const result = await runSystem(name, observedArgs, options);
       subprocesses.push({
         collector: name,
         elapsedMs: Math.round(performance.now() - started),
@@ -72,9 +82,14 @@ test('native Windows/macOS collectors find an owned TCP listener without passive
   }
   function verifyInventory(result) {
     assert.equal(result.source, source, `Expected the native ${source} collector: ${JSON.stringify({ checks: result.checks, subprocesses })}`);
-    assert.ok(result.listeners.some(listener => listener.address === '127.0.0.1'
-      && listener.port === port && listener.pid === process.pid && listener.family === 'IPv4'),
+    const owned = result.listeners.find(listener => listener.address === '127.0.0.1'
+      && listener.port === port && listener.pid === process.pid && listener.family === 'IPv4');
+    assert.ok(owned,
     `The collector must observe this process's listening socket: ${JSON.stringify({ result, subprocesses })}`);
+    if (source === 'powershell') {
+      assert.equal(owned.process?.toLowerCase(), path.parse(process.execPath).name.toLowerCase(),
+        `The native collector must resolve its own listener's process name: ${JSON.stringify({ owned, subprocesses })}`);
+    }
     if (process.platform === 'darwin') {
       assert.equal(result.checks.find(check => check.id === 'ports.visibility')?.status, 'warn',
         'Finding our own socket does not establish visibility into other users\' sockets.');

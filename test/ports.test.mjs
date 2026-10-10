@@ -167,9 +167,12 @@ test('Windows uses fixed PowerShell and never executes a process name', async ()
   assert.equal(calls[0].name, 'powershell');
   assert.deepEqual(calls[0].args.slice(0, 4), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command']);
   assert.doesNotMatch(calls[0].args.at(-1), /Start-Process|calc\.exe|3000/);
-  assert.match(calls[0].args.at(-1), /Get-NetTCPConnection/);
+  assert.match(calls[0].args.at(-1), /CimCmdlets\\Get-CimInstance.*-ClassName MSFT_NetTCPConnection.*-Filter 'State = 2'/);
+  const query = calls[0].args.at(-1).split(';').find(statement => statement.includes('Get-CimInstance'));
+  assert.doesNotMatch(query, /-ComputerName|-CimSession|-InputObject|Where-Object/);
+  assert.match(calls[0].args.at(-1), /Get-Process -Id/);
   assert.match(calls[0].args.at(-1), /PSModulePath/);
-  assert.deepEqual(calls[0].options, { platform: 'win32', timeoutMs: 8000, maxBuffer: 1024 * 1024 });
+  assert.deepEqual(calls[0].options, { platform: 'win32', timeoutMs: 12000, maxBuffer: 1024 * 1024 });
 });
 
 test('Windows falls back to both address families with netstat when PowerShell is unavailable', async () => {
@@ -181,9 +184,47 @@ test('Windows falls back to both address families with netstat when PowerShell i
   } });
   assert.equal(result.source, 'netstat');
   assert.equal(result.listeners[0].family, 'IPv6');
-  assert.equal(calls[0].options.timeoutMs, 8000, 'PowerShell needs a separate cold-start budget.');
+  assert.equal(calls[0].options.timeoutMs, 12000, 'PowerShell needs a separate cold-start budget.');
   assert.deepEqual(calls[1], { name: 'netstat', args: ['-ano'], options: { platform: 'win32', timeoutMs: 3000, maxBuffer: 1024 * 1024 } });
   assert.equal(result.checks.some(check => check.id === 'ports.visibility'), false);
+});
+
+test('Windows query timeout uses a bounded fallback that still finds the listener', async () => {
+  const calls = [];
+  const result = await inspectPorts({ port: 3000, environment: { platform: 'win32' }, run: async (name, args, options) => {
+    calls.push({ name, options });
+    if (name === 'powershell') return { ok: false, code: null, error: 'TIMEOUT', stdout: '', stderr: '' };
+    return { ok: true, code: 0, stdout: `${WIN_HEADER} TCP 127.0.0.1:3000 0.0.0.0:0 LISTENING 123\r\n`, stderr: '' };
+  } });
+  assert.equal(result.source, 'netstat');
+  assert.equal(result.listeners[0].pid, 123);
+  assert.equal(result.listeners[0].process, null, 'Unavailable names must not discard verified listener ownership.');
+  assert.deepEqual(calls.map(call => call.name), ['powershell', 'netstat']);
+  const worstCaseMs = calls.reduce((sum, call) => sum + call.options.timeoutMs, 0) + 500 + 2000;
+  assert.ok(worstCaseMs < 20000, 'Query, fallback, probe, and environment budgets must fit the CLI watchdog.');
+  assert.ok(calls.every(call => call.options.maxBuffer === 1024 * 1024));
+});
+
+test('empty Windows query results require successful completion before reporting an empty inventory', async () => {
+  for (const ok of [true, false]) {
+    const calls = [];
+    const result = await inspectPorts({ environment: { platform: 'win32' }, run: async name => {
+      calls.push(name);
+      return name === 'powershell'
+        ? { ok, code: ok ? 0 : 1, stdout: '[]\r\n', stderr: ok ? '' : 'Provider unavailable' }
+        : { ok: false, unavailable: true };
+    } });
+    assert.deepEqual(result.listeners, []);
+    if (ok) {
+      assert.equal(result.source, 'powershell');
+      assert.deepEqual(calls, ['powershell']);
+      assert.equal(result.checks.some(check => check.id === 'ports.visibility'), false);
+    } else {
+      assert.equal(result.source, 'unavailable');
+      assert.deepEqual(calls, ['powershell', 'netstat']);
+      assert.ok(result.checks.every(check => check.status === 'skip'));
+    }
+  }
 });
 
 test('incomplete subprocess results retain observations without claiming full visibility', async () => {
