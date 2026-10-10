@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { stat, realpath, open } from 'node:fs/promises';
+import { lstat, realpath, open } from 'node:fs/promises';
 import path from 'node:path';
 import { collectEnvironment, environmentChecks } from './environment.mjs';
 import { inspectCommands, inspectPath } from './which.mjs';
@@ -153,7 +153,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     let root;
     if (['doctor', 'report'].includes(command)) {
       root = path.resolve(values.project ?? args[0] ?? io.cwd ?? process.cwd());
-      const info = await stat(root);
+      const info = await lstat(root);
+      if (info.isSymbolicLink()) throw new Error('Project root must not be a symlink or junction. Pass its real directory explicitly.');
       if (!info.isDirectory()) throw new Error('Project path must be a directory.');
       root = await realpath(root);
     }

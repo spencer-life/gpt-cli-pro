@@ -45,7 +45,9 @@ actual loopback TCP connections. A probe requires an explicit numeric port.
 Project scope is either tracked Git paths under the selected directory or an
 explicitly disclosed fallback directory scan. Subdirectories of a Git project
 can be inspected separately. Findings reflect worktree script headers, not just
-the staged blob contents. The [check catalog](checks.md) defines limits.
+the staged blob contents. An explicit project root that is a symlink or Windows
+junction is rejected; pass its real directory to inspect that target. The
+[check catalog](checks.md) defines limits.
 
 ## Which
 

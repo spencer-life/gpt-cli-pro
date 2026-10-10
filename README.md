@@ -145,6 +145,8 @@ Review exported reports before sharing. See [Privacy and safety](docs/privacy.md
   cache, and sensitive paths.
 - Script inspection reads small candidate headers, not whole repositories. Project
   symlink targets and submodule contents are not traversed.
+- Explicit project-root symlinks and Windows junctions are rejected. Pass the real
+  directory explicitly to inspect that target.
 - WSL1/WSL2 and custom mounts are recognized from available evidence. Missing or
   incomplete data is reported; it does not become a clean pass.
 - Windows tool discovery is PATH/PATHEXT based. ACLs and parent-shell resolution

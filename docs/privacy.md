@@ -86,9 +86,10 @@ An interrupted output operation can leave a partial file that must be recreated
 under a new filename or removed manually.
 
 Symlinks within a project and submodule contents are not traversed for script
-inspection. An explicitly supplied project-root symlink is canonicalized by the
-CLI before that project is inspected. Native filesystem race protections depend
-on platform support; this is not a security boundary against a concurrently
+inspection. An explicitly supplied project-root symlink or Windows junction is
+rejected before canonicalization; pass its real directory explicitly to inspect
+that target. Native filesystem race protections depend on platform support;
+this is not a security boundary against a concurrently
 hostile process that can replace directories on your machine.
 
 Skipped/inaccessible/limited inspection is reported explicitly. A `pass` means

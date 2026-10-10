@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, mkdir, symlink, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +76,26 @@ test('which reports missing requested executables with exit 1', async () => {
   const report = JSON.parse(result.stdout);
   assert.ok(report.checks.some(check => check.id === 'which.requested-unresolved'));
   assert.equal(report.data.commands[0].selected, null);
+});
+
+test('doctor and report reject an explicit symlink or junction root before creating a report', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-root-link-'));
+  try {
+    const target = path.join(dir, 'target');
+    const link = path.join(dir, 'alias');
+    const output = path.join(dir, 'report.json');
+    await mkdir(target);
+    await writeFile(path.join(target, 'private-name.sh'), '#!/bin/sh\r\necho target-must-not-be-inspected\r\n');
+    await symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+    for (const command of ['doctor', 'report']) {
+      const result = await run([command, '--project', link, '--json', '--output', output]);
+      assert.equal(result.code, 2);
+      assert.equal(result.stdout, '');
+      assert.match(result.stderr, /must not be a symlink or junction/u);
+      assert.ok(!result.stderr.includes('private-name'));
+      await assert.rejects(lstat(output), { code: 'ENOENT' });
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('explicit report file creation refuses overwrites, including source files', async () => {
