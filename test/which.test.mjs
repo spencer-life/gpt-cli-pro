@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, chmod, symlink, rm, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, chmod, symlink, rm, access, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { inspectCommands, inspectPath, parsePathEntries, parsePathExt, validCommandName } from '../src/which.mjs';
@@ -107,7 +107,7 @@ test('symlinks expose their target and duplicate real files are not called multi
   const result = await inspectCommands(['tool'], environment(root, `${bin}:${path.dirname(target)}`));
   assert.equal(result.commands[0].selected, path.join(bin, 'tool'));
   assert.equal(result.commands[0].candidates[0].kind, 'symlink');
-  assert.equal(result.commands[0].candidates[0].realPath, target);
+  assert.equal(result.commands[0].candidates[0].realPath, await realpath(target));
   assert(!result.checks.some((finding) => finding.id === 'which.multiple'));
 });
 
@@ -118,7 +118,7 @@ test('symlinked PATH directories canonicalize to the same real candidate', posix
   const linked = path.join(root, 'linked');
   await symlink(actual, linked, 'dir');
   const result = await inspectCommands(['tool'], environment(root, `${linked}:${actual}`));
-  assert.equal(result.commands[0].candidates[0].realPath, target);
+  assert.equal(result.commands[0].candidates[0].realPath, await realpath(target));
   assert(!result.checks.some((finding) => finding.id === 'which.multiple'));
 });
 

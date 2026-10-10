@@ -150,7 +150,7 @@ reachability from Windows, another distribution, a container, or the LAN. See
 | Project content | 8 KiB per candidate header; 8 MiB total sampled bytes. |
 | Project Git | 2 seconds per Git invocation within the project budget; 4 MiB index output; 4 KiB repository-probe output. |
 | Listener inputs | 1 MiB per table or command result; 4,096 listeners per parsed source; 32,768 text rows/fields, excluding a recognized Linux header. Linux has separate IPv4/IPv6 tables. |
-| Listener timing | Linux table reads: 1.5 seconds each, in parallel. Windows/macOS helper commands: 3 seconds each. |
+| Listener timing | Linux table reads: 1.5 seconds each, in parallel. Windows PowerShell: 8 seconds, allowing cold module startup. Windows netstat and macOS lsof: 3 seconds each. |
 | Linux ownership | 650 ms; current process plus up to 256 other processes; up to 4,096 descriptor checks; 160-byte short-name reads. |
 | Loopback probes | 500 ms per address family; IPv4 and IPv6 run in parallel. |
 | Finding examples | Usually 12 paths; listener findings show 20 observations and at most 8 visibility issues. Text listener tables show up to 100 rows. |

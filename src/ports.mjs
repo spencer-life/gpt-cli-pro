@@ -10,6 +10,11 @@ const MAX_ROWS = 32768;
 const IO_TIMEOUT_MS = 1500;
 const OWNER_BUDGET_MS = 650;
 const PROBE_TIMEOUT_MS = 500;
+const HELPER_TIMEOUT_MS = 3000;
+// Windows PowerShell plus NetTCPIP/CIM can take more than three seconds to
+// initialize on a cold machine. Leave room for the bounded netstat fallback
+// under the CLI's separate 20-second command watchdog.
+const POWERSHELL_TIMEOUT_MS = 8000;
 const DOCS = 'https://learn.microsoft.com/windows/wsl/networking';
 
 function emptyParse() {
@@ -311,13 +316,13 @@ const POWERSHELL_SCRIPT = [
   'Microsoft.PowerShell.Utility\\ConvertTo-Json -InputObject $result -Compress -Depth 3',
 ].join('; ');
 
-async function boundedRun(run, name, args, platform) {
-  try { return await run(name, args, { platform, timeoutMs: 3000, maxBuffer: TABLE_BYTES }); }
+async function boundedRun(run, name, args, platform, timeoutMs = HELPER_TIMEOUT_MS) {
+  try { return await run(name, args, { platform, timeoutMs, maxBuffer: TABLE_BYTES }); }
   catch { return { ok: false, unavailable: true }; }
 }
 
 async function inspectWindows(run) {
-  const powershell = await boundedRun(run, 'powershell', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_SCRIPT], 'win32');
+  const powershell = await boundedRun(run, 'powershell', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_SCRIPT], 'win32', POWERSHELL_TIMEOUT_MS);
   const first = parsePowerShellListeners(powershell.stdout ?? '');
   if (powershell.ok && first.recognized && (first.listeners.length || !first.malformed)) {
     const issues = [];

@@ -169,19 +169,20 @@ test('Windows uses fixed PowerShell and never executes a process name', async ()
   assert.doesNotMatch(calls[0].args.at(-1), /Start-Process|calc\.exe|3000/);
   assert.match(calls[0].args.at(-1), /Get-NetTCPConnection/);
   assert.match(calls[0].args.at(-1), /PSModulePath/);
-  assert.deepEqual(calls[0].options, { platform: 'win32', timeoutMs: 3000, maxBuffer: 1024 * 1024 });
+  assert.deepEqual(calls[0].options, { platform: 'win32', timeoutMs: 8000, maxBuffer: 1024 * 1024 });
 });
 
 test('Windows falls back to both address families with netstat when PowerShell is unavailable', async () => {
   const calls = [];
-  const result = await inspectPorts({ environment: { platform: 'win32' }, run: async (name, args) => {
-    calls.push({ name, args });
+  const result = await inspectPorts({ environment: { platform: 'win32' }, run: async (name, args, options) => {
+    calls.push({ name, args, options });
     if (name === 'powershell') return { ok: false, unavailable: true };
     return { ok: true, code: 0, stdout: `${WIN_HEADER} TCP [::]:3000 [::]:0 LISTENING 123\r\n`, stderr: '' };
   } });
   assert.equal(result.source, 'netstat');
   assert.equal(result.listeners[0].family, 'IPv6');
-  assert.deepEqual(calls[1], { name: 'netstat', args: ['-ano'] });
+  assert.equal(calls[0].options.timeoutMs, 8000, 'PowerShell needs a separate cold-start budget.');
+  assert.deepEqual(calls[1], { name: 'netstat', args: ['-ano'], options: { platform: 'win32', timeoutMs: 3000, maxBuffer: 1024 * 1024 } });
   assert.equal(result.checks.some(check => check.id === 'ports.visibility'), false);
 });
 
@@ -228,6 +229,7 @@ test('macOS lsof results disclose permission limits even when no visible sockets
   assert.equal(result.checks.find(check => check.id === 'ports.visibility').status, 'warn');
   assert.deepEqual(calls[0].args, ['-nP', '-a', '-iTCP', '-sTCP:LISTEN', '-FpcftnT0']);
   assert.equal(calls[0].options.platform, 'darwin');
+  assert.equal(calls[0].options.timeoutMs, 3000, 'The PowerShell budget must not extend lsof.');
 });
 
 test('port filters are strictly numeric and probes require explicit true plus one port', async () => {
