@@ -1,0 +1,24 @@
+[tools]
+node = "24.21.0"
+
+[tasks.setup]
+description = "Verify runtime and install the empty locked dependency graph"
+run = "npm ci --ignore-scripts --no-audit --no-fund"
+
+[tasks.ci]
+description = "Syntax, tests, and focused security policy checks"
+run = "npm run ci"
+
+[tasks.test]
+run = "npm test"
+
+[tasks.security]
+description = "Focused secret, process, network, and workflow policy checks"
+run = "npm run security"
+
+[tasks."pack:check"]
+description = "Pack and install into a temporary prefix entirely offline"
+run = "npm run pack:check"
+
+[tasks.demo]
+run = "npm run demo"
