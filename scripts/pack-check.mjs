@@ -8,6 +8,11 @@ import { quotePath } from '../src/paths.mjs';
 import { readWindowsRoot } from '../src/process.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const skillFiles = [
+  '.agents/skills/wslens/SKILL.md',
+  '.agents/skills/wslens/agents/openai.yaml',
+  '.agents/skills/wslens/references/commands.md',
+];
 const npm = process.env.npm_execpath;
 if (!npm) throw new Error('Run this check through npm run pack:check.');
 const dir = await mkdtemp(path.join(tmpdir(), 'wslens-package-'));
@@ -18,6 +23,7 @@ try {
   assert.ok(filenames.includes('bin/wslens.mjs'));
   assert.ok(filenames.includes('src/cli.mjs'));
   assert.ok(filenames.includes('LICENSE'));
+  for (const filename of skillFiles) assert.ok(filenames.includes(filename), `Packaged agent skill file is missing: ${filename}`);
   assert.ok(!filenames.some(name => name.startsWith('test/') || name.startsWith('scripts/') || name.startsWith('.github/')));
   const prefix = path.join(dir, 'installed with spaces');
   runNpm(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', '--offline', path.join(dir, packed.filename)]);
@@ -25,6 +31,11 @@ try {
     ? path.join(prefix, 'node_modules', '@spencer-life', 'wslens')
     : path.join(prefix, 'lib', 'node_modules', '@spencer-life', 'wslens');
   const pkg = JSON.parse(await readFile(path.join(packageDir, 'package.json'), 'utf8'));
+  for (const filename of skillFiles) {
+    const installed = await readFile(path.join(packageDir, filename));
+    assert.ok(installed.length > 0 && installed.equals(await readFile(path.join(root, filename))),
+      `Installed agent skill file must be nonempty and match its source: ${filename}`);
+  }
   const shipped = new Set(filenames);
   for (const filename of filenames.filter(name => name.endsWith('.md'))) {
     const document = await readFile(path.join(packageDir, filename), 'utf8');
@@ -47,5 +58,5 @@ try {
     const script = '& ' + quotePath(shim, 'powershell') + ' --version; exit $LASTEXITCODE';
     assert.equal(execFileSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 15000 }).trim(), pkg.version);
   } else assert.equal(execFileSync(shim, ['--version'], { encoding: 'utf8' }).trim(), pkg.version);
-  console.log(`PASS: ${packed.filename} (${packed.size} bytes, ${filenames.length} files) installed offline; documentation links, CLI, and executable shim verified.`);
+  console.log(`PASS: ${packed.filename} (${packed.size} bytes, ${filenames.length} files) installed offline; agent skill, documentation links, CLI, and executable shim verified.`);
 } finally { await rm(dir, { recursive: true, force: true }); }

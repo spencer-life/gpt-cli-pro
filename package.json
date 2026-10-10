@@ -5,7 +5,7 @@
   "type": "module",
   "bin": { "wslens": "bin/wslens.mjs" },
   "engines": { "node": ">=22" },
-  "files": ["bin/", "src/", "docs/", "README.md", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "AGENTS.md"],
+  "files": ["bin/", "src/", "docs/", ".agents/skills/wslens/", "README.md", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "AGENTS.md"],
   "scripts": {
     "test": "node --test",
     "lint": "node scripts/check.mjs",

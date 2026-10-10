@@ -7,8 +7,13 @@ filesystem boundary, a shell script with CRLF, colliding filenames, or a port
 already occupied by another process. Each finding explains what was observed
 and gives a focused next step.
 
-Local by default. No API key, account, telemetry, third-party dependencies,
-installation scripts, or automatic system changes. Works with **Node.js 22+**.
+Built in **JavaScript**, using **Node.js 22+** to run in your terminal. Local by
+default: no API key, account, telemetry, third-party dependencies, installation
+scripts, or automatic system changes.
+
+Think of it as a checkup for your development setup. It helps explain why a
+command finds the wrong installation, a script breaks after editing on Windows,
+or a development server cannot use a port. You get evidence and a next step.
 
 ## Start here
 
@@ -137,6 +142,33 @@ uploaded. `--output` creates a new file and refuses to overwrite an existing one
 Redaction is not a promise that every filename or process name is anonymous.
 Review exported reports before sharing. See [Privacy and safety](docs/privacy.md).
 
+## Use with a coding agent
+
+The repository includes a **`wslens` agent skill** at
+[.agents/skills/wslens/SKILL.md](.agents/skills/wslens/SKILL.md). It teaches an
+agent which inspection to run, how to read JSON and exit codes, and how to
+explain findings without confusing incomplete checks with a healthy setup.
+
+In Codex, open a checkout containing the skill and ask:
+
+```text
+Use $wslens to check this project for Windows and WSL development problems.
+Explain the most likely cause and the next step.
+```
+
+Or ask a focused question:
+
+```text
+Use $wslens to show what is listening on port 3000 in this environment.
+```
+
+Codex can discover the repository skill automatically or use an explicit
+`$wslens` mention. To use it across other projects, copy the skill to your
+personal skills directory using the [agent setup guide](docs/agent-skill.md).
+The npm package includes the same skill files. The CLI still needs Node.js and
+access to the environment being diagnosed; a cloud agent cannot inspect your
+local Windows machine just because it has these instructions.
+
 ## Scope and limits
 
 - Git projects inspect **indexed paths within the selected directory**. Untracked
@@ -182,7 +214,7 @@ remaining native coverage; workflow configuration alone does not prove a pass.
 
 Read the [full CLI reference](docs/cli.md), [check catalog](docs/checks.md),
 [architecture](docs/architecture.md), [research and prior tools](docs/research.md),
-and [contribution guide](CONTRIBUTING.md).
+[agent setup guide](docs/agent-skill.md), and [contribution guide](CONTRIBUTING.md).
 
 ## Troubleshooting installation
 

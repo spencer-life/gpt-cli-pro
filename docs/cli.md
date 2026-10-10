@@ -63,8 +63,13 @@ when a later candidate is visible. JSON distinguishes `selected`, `observedFirst
 and `complete`. A candidate's `matchesName: false` means a related name, not a
 candidate this model would execute. Symlink targets appear as `realPath`.
 
-For authoritative parent-shell state, use that shell's own `type`/`command -V`
-or PowerShell `Get-Command`. WSLens does not run those commands for you.
+For parent-shell state, use that shell's own `type`/`command -V`. In PowerShell,
+`Microsoft.PowerShell.Core\Get-Command -Name 'node' -All -ListImported` inspects
+the current session without importing other modules; substitute the requested
+command name. Unimported module commands remain unassessed. An unrestricted
+exact-name query can import a module and run its scripts, as described in
+[Get-Command](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/get-command?view=powershell-5.1).
+WSLens does not run these shell queries for you.
 
 ## Ports
 

@@ -10,3 +10,4 @@ Initial implementation of WSLens.
 - Export redacted text, JSON, or Markdown reports and compare JSON snapshots.
 - Run without third-party dependencies or install scripts on Node.js 22+.
 - Include bounded subprocesses and filesystem inspection, platform fixtures, native integration checks, and an offline package installation test.
+- Include a portable WSLens agent skill, Codex discovery metadata, and setup instructions for Windows and WSL.

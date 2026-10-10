@@ -16,6 +16,13 @@ Node.js 22+ CLI using only built-in modules. Keep the runtime dependency-free.
 - Use available relevant skills following [skill discovery](docs/skills.md).
   Prefer official Node.js, Microsoft WSL, PowerShell, and Git documentation for
   platform semantics. No external framework or design skill is required.
+- For Windows/WSL setup diagnosis, PATH selection, port inspection, path
+  translation, or WSLens report interpretation, use the repository's
+  [wslens skill](.agents/skills/wslens/SKILL.md), explicitly as `$wslens` when
+  useful. If native skill invocation is unavailable, read it and its relevant
+  reference as manual guidance. See [agent setup](docs/agent-skill.md) for
+  portability and provenance; ordinary implementation work follows this file.
+  Keep the skill's command reference aligned when CLI behavior changes.
 - Commit coherent validated changes and push useful checkpoints within scope.
   KETA reviews the current PR head and blockers; ask for specific user merge
   approval as required by the Git workflow. Do not weaken required checks.

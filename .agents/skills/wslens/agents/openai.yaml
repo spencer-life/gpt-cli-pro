@@ -1,0 +1,4 @@
+interface:
+  display_name: "WSLens"
+  short_description: "Diagnose Windows and WSL development problems"
+  default_prompt: "Use $wslens to diagnose the current project and explain the most useful next step."

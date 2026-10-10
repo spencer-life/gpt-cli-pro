@@ -1,5 +1,18 @@
 # Discover and use skills
 
+## WSLens skill in this repository
+
+Use [$wslens](../.agents/skills/wslens/SKILL.md) for Windows/WSL environment
+diagnosis, PATH selection, local TCP ports, path translation, and report
+interpretation. It is checked in at `.agents/skills/wslens`, with its command
+reference and Codex interface metadata, and is also included in the npm package.
+The [agent setup guide](agent-skill.md) covers discovery, optional personal
+installation, examples, validation, and the official creator revision used.
+The skill guides CLI usage; contribution work still follows `AGENTS.md` and
+the owning issue.
+
+## Discover other relevant skills
+
 Skills provide task-specific instructions and resources. Start with available
 metadata from the session, repository `.agents/skills`, user `~/.agents/skills`,
 and configured legacy/plugin roots. Do not scan unrelated home directories. Use

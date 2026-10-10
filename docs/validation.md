@@ -23,7 +23,8 @@ There are no dependency-install lifecycle scripts.
 `npm run pack:check` creates the actual distributable tarball, installs it
 offline into a temporary prefix containing spaces, verifies the package
 allowlist, license, and local links in the shipped documentation, executes its
-installed CLI, and invokes the installed command shim. On Windows that final
+installed CLI, and invokes the installed command shim. It also verifies that
+all three WSLens skill files are packaged and installed byte-for-byte. On Windows that final
 check invokes the generated `.cmd` through
 the system PowerShell. All temporary package files are removed afterward.
 
@@ -76,6 +77,28 @@ Renovate configuration is included with automerge disabled. App installation,
 repository access, and successful bot runs were not established by creating
 that configuration. No registry release or background maintenance service is
 created by the implementation.
+
+## Agent skill validation
+
+The repository skill was initialized and structurally validated with the
+current official OpenAI Codex-bundled creator recorded in
+[creator provenance](agent-skill.md#creator-provenance-and-maintenance).
+The interface metadata was parsed separately to verify its display name,
+description length, `$wslens` prompt, and default implicit invocation policy.
+The upstream validator does not validate that interface or prove agent behavior.
+
+Independent agents received the skill, a realistic request, and isolated local
+artifacts without the intended answer. A project edited with CRLF script
+headers exercised real CLI diagnosis, nonzero finding exits, report creation,
+and preservation of project files. A pair of WSL PATH snapshots exercised
+before/after interpretation when an earlier candidate was inaccessible.
+The PR records observed outcomes and any refinement made from those runs.
+
+These behavioral runs used agents reading the skill as manual guidance. They
+do not establish native Codex UI discovery, automatic selection, or access to
+a user's Windows/WSL machine. Repository placement follows the current official
+discovery documentation. Package checks verify portable file delivery on each
+hosted platform; actual WSL remains the separate coverage limit above.
 
 ## Security evidence and limits
 
