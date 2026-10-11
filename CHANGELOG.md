@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Reject unsupported or sanitized command identity aliases in imported diagnostic snapshots before diff comparisons, preventing false unchanged results from stripped control characters.
+
 ## 0.1.0 — 2026-10-10
 
 Initial implementation of WSLens.

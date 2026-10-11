@@ -424,3 +424,38 @@ test('default diff rejects project-root ID aliases instead of losing a removed f
   assert.deepEqual(changes.removed.map(check => check.id), [root + '/same']);
   assert.equal(changes.unchanged, 1);
 });
+
+
+test('diff rejects command identity aliases before cleaning and preserves valid comparisons', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-command-identity-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const before = path.join(dir, 'before.json'), after = path.join(dir, 'after.json');
+  const finding = { id: 'fixture.command', status: 'pass', title: 'Identical finding' };
+  const source = { schemaVersion: 1, tool: { name: 'wslens' }, command: 'doctor', checks: [finding] };
+  await writeFile(after, JSON.stringify(source));
+  for (const altered of ['doc\x1b[31mtor', 'doc\x01tor', 'doc\u202etor']) {
+    // Previously both commands cleaned to doctor and diff incorrectly exited 0.
+    await writeFile(before, JSON.stringify({ ...source, command: altered }));
+    const result = await run(['diff', before, after, '--json']);
+    assert.equal(result.code, 2, result.stderr);
+    assert.equal(result.stdout, '', 'Reject an invalid command without emitting JSON.');
+    assert.match(result.stderr, /Snapshot command must be exactly doctor, which, or ports/u);
+  }
+  const raw = await run(['diff', after, before, '--json', '--no-redact']);
+  assert.equal(raw.code, 2, raw.stderr);
+  assert.equal(raw.stdout, '');
+  assert.match(raw.stderr, /Snapshot command must be exactly doctor, which, or ports/u);
+  await writeFile(before, JSON.stringify(source));
+  const identical = await run(['diff', before, after, '--json']);
+  assert.equal(identical.code, 0, identical.stderr);
+  assert.deepEqual(JSON.parse(identical.stdout).changed, []);
+  await writeFile(before, JSON.stringify({ ...source, checks: [{ ...finding, status: 'fail' }] }));
+  const changed = await run(['diff', before, after, '--json']);
+  assert.equal(changed.code, 1, changed.stderr);
+  assert.deepEqual(JSON.parse(changed.stdout).changed.map(item => item.id), [finding.id]);
+  await writeFile(before, JSON.stringify({ ...source, command: 'which' }));
+  const incompatible = await run(['diff', before, after, '--json']);
+  assert.equal(incompatible.code, 2, incompatible.stderr);
+  assert.equal(incompatible.stdout, '');
+  assert.match(incompatible.stderr, /Compare reports made with the same command/u);
+});

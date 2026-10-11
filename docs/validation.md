@@ -105,6 +105,8 @@ hosted platform; actual WSL remains the separate coverage limit above.
 Tests exercise redaction (including roots containing stripped control characters),
 rejection of imported finding identifiers and field names changed by cleaning
 or default project/home redaction (to prevent snapshot diff collisions),
+rejection of imported command identities altered by text cleaning (including
+a real diff case that formerly returned exit 0 and a `--no-redact` check),
 async/backpressured stderr completion and exit codes, terminal and Markdown
 escaping, PowerShell quoting,
 argument rejection, snapshot size/type checks, non-execution of project

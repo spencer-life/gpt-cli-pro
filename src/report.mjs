@@ -5,6 +5,7 @@ import { classifyFilesystem } from './environment.mjs';
 
 export const VERSION = '0.1.0';
 export const STATUSES = ['fail', 'warn', 'info', 'pass', 'skip'];
+const DIAGNOSTIC_SNAPSHOT_COMMANDS = new Set(['doctor', 'which', 'ports']);
 export const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
 
 export function cleanText(value) {
@@ -286,6 +287,11 @@ export async function readSnapshot(filename) {
   try { report = JSON.parse(text); } catch { throw new Error('Snapshot is not valid JSON.'); }
   if (report?.schemaVersion !== 1 || report?.tool?.name !== 'wslens' || !Array.isArray(report.checks) || report.checks.length > 2000 || typeof report.command !== 'string') {
     throw new Error('Expected a WSLens schemaVersion 1 JSON diagnostic report.');
+  }
+  // A command is a snapshot identity key, not text to normalize into one.
+  // The 'report' alias exports 'doctor'; path and diff are not snapshots.
+  if (cleanText(report.command) !== report.command || !DIAGNOSTIC_SNAPSHOT_COMMANDS.has(report.command)) {
+    throw new Error('Snapshot command must be exactly doctor, which, or ports, without stripped controls.');
   }
   assertStableSnapshotKeys(report);
   const ids = new Set();
