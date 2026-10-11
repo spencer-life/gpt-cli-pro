@@ -33,7 +33,10 @@ stripped characters do not bypass masking. Common Windows and Linux
 home-directory patterns are masked too, including Windows names containing
 spaces or apostrophes.
 Known project roots in imported snapshots are masked before default diff output.
-Imported snapshot finding IDs and field names must survive text sanitization
+Imported snapshot commands must be exact diagnostic identities (`doctor`,
+`which`, or `ports`). Control-character variants are rejected before comparison
+so sanitization cannot make different commands appear identical. The `report`
+alias stores `doctor` in exported JSON. Imported snapshot finding IDs and field names must survive text sanitization
 unchanged. Under default redaction, finding IDs must also remain unchanged by
 project/home masking. Snapshots failing either check are rejected rather than
 silently collapsing distinct comparison keys and hiding findings. Explicit

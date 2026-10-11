@@ -112,7 +112,11 @@ to [PowerShell's rules](https://learn.microsoft.com/en-us/powershell/module/micr
 
 Snapshots must be regular JSON files, at most 4 MiB each (4,194,304 UTF-8
 bytes), with `schemaVersion: 1`, `tool.name: "wslens"`, the same diagnostic
-command, and valid unique finding IDs. Finding IDs and JSON field names that
+command, and valid unique finding IDs. The command identity must be exactly
+`doctor`, `which`, or `ports` and must not change when terminal/control text
+is cleaned; `report` saves `command: "doctor"`, while `path` and `diff` JSON
+are not diagnostic snapshots. Altered/unknown command values fail with exit 2
+before comparison. Finding IDs and JSON field names that
 would change when terminal/control characters are cleaned are rejected at
 import. Default snapshot comparisons also reject finding IDs that change under
 home/project path masking: two otherwise distinct IDs must never collapse into

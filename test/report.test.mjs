@@ -373,3 +373,28 @@ test('snapshot IDs remain stable through the full project/home redaction policy'
   assert.equal(sanitizeSnapshot(sibling).checks[0].id, root + '-backup/status',
     'Component boundaries still distinguish sibling paths.');
 });
+
+
+test('snapshot command identity rejects sanitized aliases and unsupported commands', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wslens-snapshot-command-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const filename = path.join(dir, 'report.json'), original = report();
+  for (const [altered, expected] of [
+    ['doc\x1b[31mtor', 'doctor'], ['doc\x01tor', 'doctor'],
+    ['doc\u202etor', 'doctor'], ['doc\x7ftor', 'doctor'],
+    ['wh\x07ich', 'which'], ['po\x1b[2mrts', 'ports'],
+    ['doct\ror', 'doctor'],
+  ]) {
+    assert.equal(cleanText(altered), expected, 'Test case must reproduce a sanitized alias.');
+    await writeFile(filename, JSON.stringify({ ...original, command: altered }));
+    await assert.rejects(readSnapshot(filename), /Snapshot command must be exactly doctor, which, or ports/u);
+  }
+  for (const unsupported of ['report', 'path', 'diff', 'DOCTOR', 'doctor ', 'custom', '']) {
+    await writeFile(filename, JSON.stringify({ ...original, command: unsupported }));
+    await assert.rejects(readSnapshot(filename), /Snapshot command must be exactly doctor, which, or ports/u);
+  }
+  for (const supported of ['doctor', 'which', 'ports']) {
+    await writeFile(filename, JSON.stringify({ ...original, command: supported }));
+    assert.equal((await readSnapshot(filename)).command, supported);
+  }
+});

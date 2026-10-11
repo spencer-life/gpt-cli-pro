@@ -129,7 +129,9 @@ Use matching project scope and command options. Inputs must be regular WSLens
 schema 1 JSON diagnostic files, at most 4 MiB each, with the same diagnostic
 command. Generated diagnostic JSON follows the same limit, omitting optional
 inventory tails with an explicit warning rather than producing an unreadable
-snapshot. Markdown and path/diff JSON are not diagnostic snapshots.
+snapshot. Imported command identities must be exactly `doctor`, `which`, or
+`ports` (`report` exports `doctor`); control-character variants are rejected
+before comparison. Markdown and path/diff JSON are not diagnostic snapshots.
 
 Diff JSON separates `added`, `removed`, and `changed` findings. Compare status
 and evidence to decide whether a change improved the situation. A removed
